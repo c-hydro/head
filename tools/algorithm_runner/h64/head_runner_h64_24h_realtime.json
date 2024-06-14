@@ -1,0 +1,89 @@
+{
+  "flags": {
+    "reset_datasets_ancillary_raw": false,
+    "reset_datasets_ancillary_def": false,
+    "reset_datasets_destination": true,
+    "reset_logs": true
+  },
+  "template": {
+    "datetime_source": "%Y%m%d_0000",
+    "sub_path_source": "%Y/%m/%d/",
+    "datetime_ancillary": "%Y%m%d_0000",
+    "sub_path_ancillary": "%Y/%m/%d/",
+    "datetime_destination": "%Y%m%d_0000",
+    "sub_path_destination": "%Y/%m/%d/"
+  },
+  "methods": {
+    "resample_data": {
+      "rain": {"min_neighbours": 1, "neighbours": 8, "search_rad": 25000, "method": "nn", "fill_value": -9999.0},
+      "quality": {"min_neighbours": 1, "neighbours": 8, "search_rad": 25000, "method": "nn", "fill_value": -9999.0}
+    },
+    "mask_data": {
+      "rain": {"var_min": 0, "var_max": null, "no_data": null},
+      "quality": {"var_min": 0, "var_max": 100, "no_data": null}
+    }
+  },
+  "datasets": {
+    "static": {
+      "grid_source" : {
+        "folder_name": null,
+        "file_name": null
+      },
+      "grid_destination" : {
+        "geo_x_corner_ll": -90.0, "geo_x_corner_ur": 90.0,
+        "geo_y_corner_ll": -65.0, "geo_y_corner_ur": 80.0,
+        "geo_x_res": 0.25, "geo_y_res": 0.25
+      }
+    },
+    "dynamic" : {
+      "source": {
+      	"__comment__" : "h64: h64_20240605_0000_24_hea.nc.gz",
+        "folder_name": "/share/HSAF_PRECIPITATION/nrt/h64/{sub_path_source}",
+        "file_name": "h64_{datetime_source}_24_hea.nc.gz",
+        "compression": true,
+        "format": "netcdf",
+        "variables": {
+          "rain": "acc_rr",
+          "integration_flag": "integration flag", "integration_weights": "integration weights",
+          "longitude": "lon", "latitude": "lat"}
+      },
+      "ancillary": {
+        "raw": {
+      	  "folder_name": "/share/DEWETRA/ancillary/h64/{sub_path_ancillary}",
+      	  "file_name": "h64_{datetime_ancillary}.raw.workspace"
+        },
+        "def": {
+          "folder_name": "/share/DEWETRA/ancillary/h64/{sub_path_ancillary}",
+      	  "file_name": "h64_{datetime_ancillary}.def.workspace"
+        }
+      },
+      "destination": {
+        "__comment__": "format: [netcdf, tiff]",
+        "folder_name": "/share/DEWETRA/nrt/h64/{sub_path_destination}",
+        "file_name": "h64_{datetime_destination}_24h_world.nc",
+        "compression": false,
+        "format": "netcdf",
+        "variables": {
+          "rain": "rain_rate_accumulated_24h",
+          "integration_flag": "integration_flag", "integration_weights": "integration_weights"}
+      }
+    }
+  },
+  "time": {
+    "_comment_": "2022-11-29 00:00 2022-12-02 03:00",
+    "time_now": null,
+    "time_start": null,
+    "time_end": null,
+    "time_period": 5,
+    "time_frequency": "1D",
+    "time_rounding" : "1D"
+  },
+  "log": {
+    "folder_name" : "/share/DEWETRA/log/precipitation/",
+    "file_name": "head_runner_h64_24h_realtime.txt"
+  },
+  "tmp": {
+    "folder_name" : "/share/DEWETRA/tmp/precipitation/",
+    "file_name": null
+  }
+}

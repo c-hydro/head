@@ -1,0 +1,84 @@
+{
+  "flags": {
+    "reset_datasets_ancillary_raw": false,
+    "reset_datasets_ancillary_def": false,
+    "reset_datasets_destination": true,
+    "reset_logs": true
+  },
+  "template": {
+    "datetime_source": "%Y%m%d_%H%M",
+    "sub_path_source": "%Y/%m/%d/",
+    "datetime_ancillary": "%Y%m%d_%H%M",
+    "sub_path_ancillary": "%Y/%m/",
+    "datetime_destination": "%Y%m%d_%H%M",
+    "sub_path_destination": "%Y/%m/"
+  },
+  "methods": {
+    "resample_data": {
+      "rain": {"min_neighbours": 1, "neighbours": 8, "search_rad": 25000, "method": "nn", "fill_value": -9999.0},
+      "quality": {"min_neighbours": 1, "neighbours": 8, "search_rad": 25000, "method": "nn", "fill_value": -9999.0}
+    },
+    "mask_data": {
+      "rain": {"var_min": 0.001, "var_max": null, "no_data": null},
+      "quality": {"var_min": 0, "var_max": 100, "no_data": null}
+    }
+  },
+  "datasets": {
+    "static": {
+      "grid_source" : {
+        "folder_name": "/home/fabio/Desktop/Head_Workspace/ws/h60/data_static/",
+        "file_name": "lat_lon_0.nc"
+      },
+      "grid_destination" : {
+        "geo_x_corner_ll": -90.0, "geo_x_corner_ur": 90.0,
+        "geo_y_corner_ll": -65.0, "geo_y_corner_ur": 80.0,
+        "geo_x_res": 0.25, "geo_y_res": 0.25
+      }
+    },
+    "dynamic" : {
+      "source": {
+      	"__comment__" : "h60: h60_20240605_0145_fdk.nc.gz",
+        "folder_name": "/home/fabio/Desktop/Head_Workspace/ws/h60/data_dynamic/source/",
+        "file_name": "h60_{datetime_source}_fdk.nc.gz",
+        "compression": true,
+        "format": "netcdf",
+        "variables": {"rain": "rr", "quality": "qind"}
+      },
+      "ancillary": {
+        "raw": {
+      	  "folder_name": "/home/fabio/Desktop/Head_Workspace/ws/h60/data_dynamic/ancillary/{sub_path_ancillary}",
+      	  "file_name": "h60_{datetime_ancillary}.raw.workspace"
+        },
+        "def": {
+          "folder_name": "/home/fabio/Desktop/Head_Workspace/ws/h60/data_dynamic/ancillary/{sub_path_ancillary}",
+      	  "file_name": "h60_{datetime_ancillary}.def.workspace"
+        }
+      },
+      "destination": {
+        "__comment__": "format: [netcdf, tiff]",
+        "folder_name": "/home/fabio/Desktop/Head_Workspace/ws/h60/data_dynamic/destination/{sub_path_destination}",
+        "file_name": "h60_{datetime_destination}_world.tiff",
+        "compression": false,
+        "format": "tiff",
+        "variables": {"rain": "rain_rate", "quality": "quality_index"}
+      }
+    }
+  },
+  "time": {
+    "_comment_": "2022-11-29 00:00 2022-12-02 03:00",
+    "time_now": null,
+    "time_start": null,
+    "time_end": null,
+    "time_period": 10,
+    "time_frequency": "15min",
+    "time_rounding" : "15min"
+  },
+  "log": {
+    "folder_name" : "/home/fabio/Desktop/Head_Workspace/ws/log/precipitation_h60/",
+    "file_name": "app_precipitation_h60_local.txt"
+  },
+  "tmp": {
+    "folder_name" : "/home/fabio/Desktop/Head_Workspace/ws/tmp/precipitation_h60/",
+    "file_name": null
+  }
+}

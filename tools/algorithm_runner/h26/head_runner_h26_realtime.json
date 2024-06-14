@@ -1,0 +1,148 @@
+{
+  "flags": {
+    "reset_datasets_ancillary_raw": false,
+    "reset_datasets_ancillary_def": true,
+    "reset_datasets_destination": true,
+    "reset_logs": true
+  },
+  "template": {
+    "datetime_source": "%Y%m%d00",
+    "sub_path_source": "%Y/%m/%d/",
+    "datetime_ancillary": "%Y%m%d",
+    "sub_path_ancillary": "%Y/%m/%d/",
+    "datetime_destination": "%Y%m%d",
+    "sub_path_destination": "%Y/%m/%d/"
+  },
+  "methods": {
+    "organize_data":{
+      "rzsm_0_7": {
+        "mask_in": null,  "mask_out": null,  "mask_meaning": null,
+        "type_in": "float", "type_out": "float",
+        "min_value": 0, "max_value": 100,
+        "no_data": null,
+        "scale_factor": 0.01,
+        "missing_value": -9999.0,
+        "fill_value": -9999.0
+      },
+      "rzsm_7_28": {
+        "mask_in": null,  "mask_out": null,  "mask_meaning": null,
+        "type_in": "float", "type_out": "float",
+        "min_value": 0, "max_value": 100,
+        "no_data": null,
+        "scale_factor": 0.01,
+        "missing_value": -9999.0,
+        "fill_value": -9999.0
+      },
+      "rzsm_28_100": {
+        "mask_in": null,  "mask_out": null,  "mask_meaning": null,
+        "type_in": "float", "type_out": "float",
+        "min_value": 0, "max_value": 100,
+        "no_data": null,
+        "scale_factor": 0.01,
+        "missing_value": -9999.0,
+        "fill_value": -9999.0
+      },
+      "rzsm_100_289": {
+        "mask_in": null,  "mask_out": null,  "mask_meaning": null,
+        "type_in": "float", "type_out": "float",
+        "min_value": 0, "max_value": 100,
+        "no_data": null,
+        "scale_factor": 0.01,
+        "missing_value": -9999.0,
+        "fill_value": -9999.0
+      },
+      "longitude": {
+        "mask_in": null, "mask_out": null, "mask_meaning": null,
+        "type_in": "float", "type_out": "float",
+        "min_value": -180, "max_value": 180,
+        "no_data": -9999,
+        "scale_factor": 1,
+        "missing_value": 0,
+        "fill_value": -9999
+      },
+      "latitude": {
+        "mask_in": null, "mask_out": null, "mask_meaning": null,
+        "type_in": "float", "type_out": "float",
+        "min_value": -90, "max_value": 90,
+        "no_data": -9999,
+        "scale_factor": 1,
+        "missing_value": 0,
+        "fill_value": -9999
+      }
+    },
+    "resample_data": {
+      "rzsm_0_7": {"min_neighbours": 1, "neighbours": 8, "search_rad": 25000, "method": "nn", "fill_value": -9999.0},
+      "rzsm_7_28": {"min_neighbours": 1, "neighbours": 8, "search_rad": 25000, "method": "nn", "fill_value": -9999.0},
+      "rzsm_28_100": {"min_neighbours": 1, "neighbours": 8, "search_rad": 25000, "method": "nn", "fill_value": -9999.0},
+      "rzsm_100_289": {"min_neighbours": 1, "neighbours": 8, "search_rad": 25000, "method": "nn", "fill_value": -9999.0}
+    },
+    "mask_data": {
+      "rzsm_0_7": {"var_min": 0, "var_max": 100, "no_data": null},
+      "rzsm_7_28": {"var_min": 0, "var_max": 100, "no_data": null},
+      "rzsm_28_100": {"var_min": 0, "var_max": 100, "no_data": null},
+      "rzsm_100_289": {"var_min": 0, "var_max": 100, "no_data": null}
+    }
+  },
+  "datasets": {
+    "static": {
+      "grid_source" : {
+        "folder_name": null,
+        "file_name": null
+      },
+      "grid_destination" : {
+        "geo_x_corner_ll": -180.0, "geo_x_corner_ur": 180.0,
+        "geo_y_corner_ll": -90.0, "geo_y_corner_ur": 90.0,
+        "geo_x_res": 0.25, "geo_y_res": 0.25
+      }
+    },
+    "dynamic" : {
+      "source": {
+      	"__comment__" : "h26: h26_2024060900_R01.nc",
+        "folder_name": "/share/HSAF_SM/ecmwf/nrt/h26/{sub_path_source}",
+        "file_name": "h26_{datetime_source}_R01.nc",
+        "compression": false,
+        "format": "netcdf",
+        "variables": {
+          "rzsm_0_7": "var40", "rzsm_7_28": "var41", "rzsm_28_100": "var42", "rzsm_100_289": "var43",
+          "longitude": "lon", "latitude": "lat"}
+      },
+      "ancillary": {
+        "raw": {
+      	  "folder_name": "/share/DEWETRA/ancillary/h26/{sub_path_ancillary}",
+      	  "file_name": "h26_{datetime_ancillary}.raw.workspace"
+        },
+        "def": {
+          "folder_name": "/share/DEWETRA/ancillary/h26/{sub_path_ancillary}",
+      	  "file_name": "h26_{datetime_ancillary}.def.workspace"
+        }
+      },
+      "destination": {
+        "__comment__": "format: [netcdf, tiff]",
+        "folder_name": "/share/DEWETRA/nrt/h26/{sub_path_destination}",
+        "file_name": "h26_{datetime_destination}_world.nc",
+        "compression": false,
+        "format": "netcdf",
+        "variables": {
+          "rzsm_0_7": "rzsm_0_7", "rzsm_7_28": "rzsm_7_28",
+          "rzsm_28_100": "rzsm_28_100", "rzsm_100_289": "rzsm_100_289"}
+      }
+    }
+  },
+  "time": {
+    "_comment_": "2022-11-29 00:00 2022-12-02 03:00",
+    "time_now": null,
+    "time_start": null,
+    "time_end": null,
+    "time_period": 5,
+    "time_frequency": "1D",
+    "time_rounding" : "1D"
+  },
+  "log": {
+    "folder_name" : "/share/DEWETRA/log/sm/",
+    "file_name": "head_runner_h26_realtime.txt"
+  },
+  "tmp": {
+    "folder_name" : "/share/DEWETRA/log/sm/",
+    "file_name": null
+  }
+}
