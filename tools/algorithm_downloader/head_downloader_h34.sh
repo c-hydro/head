@@ -9,11 +9,11 @@ script_date='2018/07/25'
 # Script argument(s)
 data_folder_raw="/share/HSAF_SNOW/nrt/h34/%YYYY/%MM/%DD/"
 days=10
-proxy="http://130.251.104.8:3128"
+proxy=""
 
 ftp_url="ftphsaf.meteoam.it"
-ftp_usr="sgabellani_r" 
-ftp_pwd="gabellaniS334"
+ftp_usr="" 
+ftp_pwd=""
 ftp_folder="/products/h34/h34_cur_mon_data"
 # ----------------------------------------------------------------------------------------
 

@@ -8,11 +8,11 @@ script_date='2024/01/30'
 
 # Script argument(s)
 days=10
-proxy="http://130.251.104.8:3128" 
+proxy=""
 
 ftp_url="ftphsaf.meteoam.it"
-ftp_usr="sgabellani_r" 
-ftp_pwd="gabellaniS334"
+ftp_usr="" 
+ftp_pwd=""
 ftp_folder_raw="/products/h14/h14_cur_mon_grib/" 	# current
 #ftp_folder_raw="/hsaf_archive/h14/%YYYY/%MM/%DD/"	# archive
 

@@ -22,16 +22,27 @@ log_stream = logging.getLogger(logger_name)
 # Method to unzip file
 def unzip_filename(file_name_zip, file_name_unzip):
 
-    file_handle_zip = gzip.GzipFile(file_name_zip, "rb")
-    file_handle_unzip = open(file_name_unzip, "wb")
+    try:
+        file_handle_zip = gzip.GzipFile(file_name_zip, "rb")
+        file_handle_unzip = open(file_name_unzip, "wb")
 
-    file_data_unzip = file_handle_zip.read()
-    file_handle_unzip.write(file_data_unzip)
+        file_data_unzip = file_handle_zip.read()
+        file_handle_unzip.write(file_data_unzip)
 
-    file_handle_zip.close()
-    file_handle_unzip.close()
+        file_handle_zip.close()
+        file_handle_unzip.close()
+
+        check_process = True
+
+    except BaseException as base_exp:
+        log_stream.warning(' ===> Error in unzipping file "' + file_name_zip)
+        log_stream.warning(' ===> ' + str(base_exp))
+        check_process = False
+
+    return check_process
 
 # ----------------------------------------------------------------------------------------------------------------------
+
 
 
 # ----------------------------------------------------------------------------------------------------------------------

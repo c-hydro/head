@@ -1,0 +1,127 @@
+{
+  "flags": {
+    "reset_datasets_ancillary_raw": true,
+    "reset_datasets_ancillary_def": true,
+    "reset_datasets_destination": true,
+    "reset_logs": true
+  },
+  "template": {
+    "datetime_source": "%Y%m%d",
+    "sub_path_source": "%Y/%m/%d/",
+    "datetime_ancillary": "%Y%m%d",
+    "sub_path_ancillary": "%Y/%m/",
+    "datetime_destination": "%Y%m%d0000",
+    "sub_path_destination": "%Y/%m/%d/"
+  },
+  "methods": {
+    "organize_data":{
+      "snow_cover_data": {
+        "mask_in": [0, 42, 85, 170, 212, 233],
+        "mask_out": [1, 2, 3, 4, 5, 5],
+        "mask_meaning": ["snow", "cloud", "bare_ground", "water", "dark", "no_data"],
+        "type_in": "int", "type_out": "float",
+        "min_value": 0, "max_value": null,
+        "no_data": 255,
+        "scale_factor": 1,
+        "missing_value": 233,
+        "fill_value": -9999.0
+      },
+      "snow_cover_quality": {
+        "mask_in": [1], "mask_out": [1], "mask_meaning": ["quality"],
+        "type_in": "int", "type_out": "float",
+        "min_value": 0, "max_value": null,
+        "no_data": 255,
+        "scale_factor": 1,
+        "missing_value": 233,
+        "fill_value": -9999.0
+      },
+      "longitude": {
+        "mask_in": null, "mask_out": null, "mask_meaning": null,
+        "type_in": "int", "type_out": "float",
+        "min_value": -180, "max_value": 180,
+        "no_data": 9000,
+        "scale_factor": 100,
+        "missing_value": 0,
+        "fill_value": -9999
+      },
+      "latitude": {
+        "mask_in": null, "mask_out": null, "mask_meaning": null,
+        "type_in": "int", "type_out": "float",
+        "min_value": -90, "max_value": 90,
+        "no_data": 9000,
+        "scale_factor": 100,
+        "missing_value": 0,
+        "fill_value": -9999
+      }
+    },
+    "resample_data": {
+      "snow_cover_data": {"min_neighbours": 1, "neighbours": 8, "search_rad": 25000, "method": "nn", "fill_value": -9999.0},
+      "snow_cover_quality": {"min_neighbours": 1, "neighbours": 8, "search_rad": 25000, "method": "nn", "fill_value": -9999.0}
+    },
+    "mask_data": {
+      "snow_cover_data": {"var_min": 0, "var_max": null, "no_data": null},
+      "snow_cover_quality": {"var_min": 0, "var_max": null, "no_data": null}
+    }
+  },
+  "datasets": {
+    "static": {
+      "grid_source" : {
+        "folder_name": null,
+        "file_name": null
+      },
+      "grid_destination" : {
+        "geo_x_corner_ll": -90.0, "geo_x_corner_ur": 90.0,
+        "geo_y_corner_ll": -65.0, "geo_y_corner_ur": 80.0,
+        "geo_x_res": 0.25, "geo_y_res": 0.25
+      }
+    },
+    "dynamic" : {
+      "source": {
+        "__comment__": "h34: h34_20240529_day_merged.H5.gz",
+        "folder_name": "/share/HSAF_SNOW/nrt/h34/{sub_path_source}",
+        "file_name": "h34_{datetime_source}_day_merged.H5.gz",
+        "compression": true,
+        "format": "hdf5",
+        "variables": {
+          "snow_cover_data": "SC", "snow_cover_quality": "SC_Q_Flags",
+          "longitude": "LON", "latitude": "LAT"
+        }
+      },
+      "ancillary": {
+        "raw": {
+      	  "folder_name": "/share/DEWETRA/ancillary/h34/{sub_path_ancillary}",
+      	  "file_name": "h34_{datetime_ancillary}.raw.workspace"
+        },
+        "def": {
+          "folder_name": "/share/DEWETRA/ancillary/h34/{sub_path_ancillary}",
+      	  "file_name": "h34_{datetime_ancillary}.def.workspace"
+        }
+      },
+      "destination": {
+        "__comment__": "format: [netcdf, tiff]",
+        "folder_name": "/share/DEWETRA/nrt/h34/{sub_path_destination}",
+        "file_name": "hsaf_h34_{datetime_destination}_fdisk.nc",
+        "compression": false,
+        "format": "netcdf",
+        "variables": {"snow_cover_data": "snow_cover", "snow_cover_quality": "snow_cover_quality"}
+      }
+    }
+  },
+  "time": {
+    "_comment_": "2022-11-29 00:00 2022-12-02 03:00",
+    "time_now": null,
+    "time_start": null,
+    "time_end": null,
+    "time_period": 4,
+    "time_frequency": "1D",
+    "time_rounding" : "1D"
+  },
+  "log": {
+    "folder_name" : "/share/DEWETRA/log/snow/",
+    "file_name": "head_runner_h34_realtime.txt"
+  },
+  "tmp": {
+    "folder_name" : "/share/DEWETRA/tmp/snow/",
+    "file_name": null
+  }
+}

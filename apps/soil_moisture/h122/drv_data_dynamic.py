@@ -101,6 +101,7 @@ class DrvData:
 
         self.grid_geo_x_src, self.grid_geo_y_src = self.alg_static['grid_geo_x_src'], self.alg_static['grid_geo_y_src']
         self.transform_src, self.proj_src = self.alg_static['transform_src'], self.alg_static['proj_src']
+        self.grid_geo_values_dst = self.alg_static['grid_geo_values_dst']
         self.grid_geo_x_dst, self.grid_geo_y_dst = self.alg_static['grid_geo_x_dst'], self.alg_static['grid_geo_y_dst']
         self.transform_dst, self.proj_dst = self.alg_static['transform_dst'], self.alg_static['proj_dst']
 
@@ -272,7 +273,7 @@ class DrvData:
         else:
 
             # info end time step
-            alg_logger.info(' -----> Time reference "' + alg_time_reference.strftime(time_format_algorithm) +
+            alg_logger.info(' ----> Time reference "' + alg_time_reference.strftime(time_format_algorithm) +
                             '" ... SKIPPED. Datasets previously saved.')
 
         # info end method
@@ -291,6 +292,7 @@ class DrvData:
         file_path_anc_raw_tmpl, file_path_anc_def_tmpl = self.file_path_anc_raw, self.file_path_anc_def
         # get grid info
         grid_geo_x_src, grid_geo_y_src = self.grid_geo_x_src, self.grid_geo_y_src
+        grid_geo_values_dst = self.grid_geo_values_dst
         grid_geo_x_dst, grid_geo_y_dst = self.grid_geo_x_dst, self.grid_geo_y_dst
         # get settings methods
         settings_resample_data = self.settings_resample_data
@@ -327,7 +329,8 @@ class DrvData:
                 # resample datasets
                 obj_data_anc_resample_step = resample_data(
                     obj_data_anc_adapt_step, obj_geo_x_adapt_step, obj_geo_y_adapt_step,
-                    grid_geo_x_dst, grid_geo_y_dst, **settings_resample_data)
+                    grid_geo_x_dst, grid_geo_y_dst, geo_mask_dst=grid_geo_values_dst,
+                    **settings_resample_data)
                 # info end resample datasets
                 alg_logger.info(' -----> (3) Resample datasets ... DONE')
 

@@ -14,13 +14,12 @@ days=2
 local_folder_raw="/share/HSAF_PRECIPITATION/nrt/h60/%YYYY/%MM/%DD/"
 
 # script ftp settings
-proxy="http://130.251.104.8:3128"
-#proxy=""
+proxy=""
 
 ftp_machine="ftphsaf.meteoam.it"
 ftp_url="ftphsaf.meteoam.it"
-ftp_usr="sgabellani_r" 
-ftp_pwd="gabellaniS334"
+ftp_usr="" 
+ftp_pwd=""
 
 # check mode to choose ftp folder
 if [ "$script_mode" == 'realtime' ]; then

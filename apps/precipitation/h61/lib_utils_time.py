@@ -87,7 +87,7 @@ def set_time_info(time_run_args=None, time_run_file=None, time_format='%Y-%m-%d 
             raise IOError('Time type or format is wrong')
 
         time_df = pd.DataFrame([{'time_run': pd.Timestamp(time_run)}])
-        time_df['time_round'] = time_df['time_run'].dt.round(time_rounding)
+        time_df['time_round'] = time_df['time_run'].dt.floor(time_rounding)
         time_run = time_df['time_round'].values[0]
 
         if time_period > 0:

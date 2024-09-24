@@ -2,16 +2,16 @@
   "flags": {
     "reset_datasets_ancillary_raw": false,
     "reset_datasets_ancillary_def": false,
-    "reset_datasets_destination": true,
+    "reset_datasets_destination": false,
     "reset_logs": true
   },
   "template": {
     "datetime_source": "%Y%m%d_%H%M",
     "sub_path_source": "%Y/%m/%d/",
     "datetime_ancillary": "%Y%m%d_%H%M",
-    "sub_path_ancillary": "%Y/%m/",
-    "datetime_destination": "%Y%m%d_%H%M",
-    "sub_path_destination": "%Y/%m/"
+    "sub_path_ancillary": "%Y/%m/%d/%H00",
+    "datetime_destination": "%Y%m%d%H%M",
+    "sub_path_destination": "%Y/%m/%d/%H00"
   },
   "methods": {
     "resample_data": {
@@ -26,7 +26,7 @@
   "datasets": {
     "static": {
       "grid_source" : {
-        "folder_name": "/home/fabio/Desktop/Head_Workspace/ws/h60/data_static/",
+        "folder_name": "/share/HSAF_PRECIPITATION/auxiliary/geo/h60/",
         "file_name": "lat_lon_0.nc"
       },
       "grid_destination" : {
@@ -38,7 +38,7 @@
     "dynamic" : {
       "source": {
       	"__comment__" : "h60: h60_20240605_0145_fdk.nc.gz",
-        "folder_name": "/home/fabio/Desktop/Head_Workspace/ws/h60/data_dynamic/source/",
+        "folder_name": "/share/HSAF_PRECIPITATION/nrt/h60/{sub_path_source}",
         "file_name": "h60_{datetime_source}_fdk.nc.gz",
         "compression": true,
         "format": "netcdf",
@@ -46,18 +46,18 @@
       },
       "ancillary": {
         "raw": {
-      	  "folder_name": "/home/fabio/Desktop/Head_Workspace/ws/h60/data_dynamic/ancillary/{sub_path_ancillary}",
+      	  "folder_name": "/share/DEWETRA/ancillary/h60/{sub_path_ancillary}",
       	  "file_name": "h60_{datetime_ancillary}.raw.workspace"
         },
         "def": {
-          "folder_name": "/home/fabio/Desktop/Head_Workspace/ws/h60/data_dynamic/ancillary/{sub_path_ancillary}",
+          "folder_name": "/share/DEWETRA/ancillary/h60/{sub_path_ancillary}",
       	  "file_name": "h60_{datetime_ancillary}.def.workspace"
         }
       },
       "destination": {
         "__comment__": "format: [netcdf, tiff]",
-        "folder_name": "/home/fabio/Desktop/Head_Workspace/ws/h60/data_dynamic/destination/{sub_path_destination}",
-        "file_name": "h60_{datetime_destination}_world.nc",
+        "folder_name": "/share/DEWETRA/nrt/h60_DB/{sub_path_destination}",
+        "file_name": "hsaf_h60_{datetime_destination}_fdisk.nc",
         "compression": false,
         "format": "netcdf",
         "variables": {"rain": "rain_rate", "quality": "quality_index"}
@@ -69,16 +69,16 @@
     "time_now": null,
     "time_start": null,
     "time_end": null,
-    "time_period": 10,
+    "time_period": 96,
     "time_frequency": "15min",
     "time_rounding" : "15min"
   },
   "log": {
-    "folder_name" : "/home/fabio/Desktop/Head_Workspace/ws/log/precipitation_h60/",
-    "file_name": "app_precipitation_h60_local.txt"
+    "folder_name" : "/share/DEWETRA/log/precipitation/",
+    "file_name": "head_runner_h60_history.txt"
   },
   "tmp": {
-    "folder_name" : "/home/fabio/Desktop/Head_Workspace/ws/tmp/precipitation_h60/",
+    "folder_name" : "/share/DEWETRA/tmp/precipitation/",
     "file_name": null
   }
 }

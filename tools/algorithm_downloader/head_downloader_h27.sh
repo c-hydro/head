@@ -8,12 +8,11 @@ script_date='2019/10/04'
 
 # Script argument(s)
 days=4000
-proxy="http://130.251.104.8:3128" 
+proxy=""
 
 ftp_url="ftphsaf.meteoam.it"
 ftp_usr="" 
 ftp_pwd=""
-
 ftp_folder_raw="/products/h27/SMDAS3_%YYYY_T1279/%YYYY%MM/" # archive h27
 
 # Define folder(s)

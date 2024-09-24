@@ -233,6 +233,7 @@ def resample_points_to_grid(var_data_in_1d, var_geox_1d_in, var_geoy_1d_in,
 
     var_geox_2d_out, var_geoy_2d_out = np.meshgrid(np.unique(var_geox_1d_out), np.unique(var_geoy_1d_out))
 
+    # search_rad = 50000; min_neighbours = 2; neighbours = 4
     values_obj = resample_to_grid(
         {'data': var_data_in_1d},
         var_geox_1d_in, var_geoy_1d_in, var_geox_2d_out, var_geoy_2d_out,

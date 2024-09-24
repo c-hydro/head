@@ -9,7 +9,7 @@ script_date='2019/04/17'
 # Script argument(s)
 data_folder_raw="/home/hsaf/hsaf_datasets/dynamic/source/h05b/%YYYY/%MM/%DD/"
 days=5
-proxy="http://130.251.104.8:3128"
+proxy=""
 
 ftp_url="ftphsaf.meteoam.it"
 ftp_usr="" 

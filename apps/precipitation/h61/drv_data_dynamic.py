@@ -155,33 +155,53 @@ class DrvData:
                 if os.path.exists(file_path_src_step):
 
                     # check compression mode
+                    compression_check = True
                     if self.compression_src:
                         file_path_tmp_step = remove_zip_extension(file_path_src_step)
-                        unzip_filename(file_path_src_step, file_path_tmp_step)
+                        compression_check = unzip_filename(file_path_src_step, file_path_tmp_step)
                     else:
                         file_path_tmp_step = deepcopy(file_path_src_step)
 
-                    # get dataset source
-                    obj_data_src = read_file_nc(file_path_tmp_step, file_variables=self.variables_src)
+                    # check unzipping process (if applied to the file)
+                    if compression_check:
 
-                    # organize variable(s) source
-                    vars_src_step = organize_data(obj_data_src, self.grid_geo_x_src, self.grid_geo_y_src)
+                        # get dataset source
+                        obj_data_src = read_file_nc(file_path_tmp_step, file_variables=self.variables_src)
 
-                    # save variable(s) obj to ancillary file
-                    folder_name_anc_raw_step, file_name_anc_raw_step = os.path.split(file_path_anc_raw_step)
-                    make_folder(folder_name_anc_raw_step)
-                    write_file_obj(file_path_anc_raw_step, vars_src_step)
+                        # check dataset source
+                        if obj_data_src:
+
+                            # organize variable(s) source
+                            vars_src_step = organize_data(obj_data_src, self.grid_geo_x_src, self.grid_geo_y_src)
+
+                            # save variable(s) obj to ancillary file
+                            folder_name_anc_raw_step, file_name_anc_raw_step = os.path.split(file_path_anc_raw_step)
+                            make_folder(folder_name_anc_raw_step)
+                            write_file_obj(file_path_anc_raw_step, vars_src_step)
+
+                            # info end time step
+                            alg_logger.info(' ----> Time Step "' + alg_time_step.strftime(time_format_algorithm) +
+                                            '" ... DONE')
+
+                        else:
+                            # info end time step
+                            alg_logger.info(' ----> Time Step "' + alg_time_step.strftime(time_format_algorithm) +
+                                            '" ... FAILED. Open file "' + file_path_tmp_step +
+                                            '" failed for data reading')
+
+                    else:
+                        # info end time step (failed unzipping process)
+                        alg_logger.info(' ----> Time Step "' + alg_time_step.strftime(time_format_algorithm) +
+                                        '" ... FAILED. Unzip file "' + file_path_tmp_step +
+                                        '" failed for streams errors')
 
                     # delete uncompressed file (if needed)
                     if self.compression_src:
                         if os.path.exists(file_path_tmp_step):
                             os.remove(file_path_tmp_step)
 
-                    # info end time step
-                    alg_logger.info(' ----> Time Step "' + alg_time_step.strftime(time_format_algorithm) +
-                                    '" ... DONE')
                 else:
-                    # info end time step
+                    # info end time step (failed no available)
                     alg_logger.info(' ----> Time Step "' + alg_time_step.strftime(time_format_algorithm) +
                                     '" ... FAILED. File "' + file_path_src_step + '" not available.')
             else:

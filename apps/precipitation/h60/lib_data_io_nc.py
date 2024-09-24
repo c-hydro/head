@@ -90,12 +90,24 @@ def read_file_nc(file_name, file_variables=None):
         file_obj = {}
         for var_name_out, var_name_in in file_variables.items():
             if var_name_in in list(file_dset.data_vars):
-                file_obj[var_name_out] = file_dset[var_name_in].values
+
+                var_values = file_dset[var_name_in].values
+
+                if np.isnan(var_values).all():
+                    alg_logger.warning(' ===> Variable "' + var_name_in + '" has only NaN values')
+                    file_obj[var_name_out] = None
+                else:
+                    file_obj[var_name_out] = var_values
             else:
                 alg_logger.warning(' ===> Variable "' + var_name_in + '" not found in the dataset')
                 file_obj[var_name_out] = None
     else:
         alg_logger.warning(' ===> File name "' + file_name + '" not found')
+        file_obj = None
+
+    vars_obj = list(file_obj.values())
+    if all(var is None for var in vars_obj):
+        alg_logger.warning(' ===> File name "' + file_name + '" has no valid variable(s)')
         file_obj = None
 
     return file_obj

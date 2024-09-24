@@ -10,12 +10,14 @@ Version:       '1.0.0'
 # Library
 import logging
 import os
+import rasterio
 
 import numpy as np
 import xarray as xr
 
-from lib_info_args import logger_name
+from copy import deepcopy
 
+from lib_info_args import logger_name
 
 # set logger
 alg_logger = logging.getLogger(logger_name)
@@ -49,12 +51,50 @@ def read_grid_data(file_name):
 
     # open file
     if os.path.exists(file_name):
-        file_dset = xr.open_dataset(file_name)
-        file_geo_x = file_dset.variables['long'].values
-        file_geo_y = file_dset.variables['latg'].values
+        if file_name.endswith('nc') or file_name.endswith('nc4'):
+            file_dset = xr.open_dataset(file_name)
+            file_geo_x = file_dset.variables['long'].values
+            file_geo_y = file_dset.variables['latg'].values
+
+            file_values = file_dset.values
+
+        elif file_name.endswith('tif') or file_name.endswith('tiff'):
+
+            file_handle = rasterio.open(file_name, 'r')
+            bounds, res, transform = file_handle.bounds, file_handle.res, file_handle.transform
+            data = file_handle.read()
+
+            values = np.float32(data[0, :, :])
+
+            center_right = bounds.right - (res[0] / 2)
+            center_left = bounds.left + (res[0] / 2)
+            center_top = bounds.top - (res[1] / 2)
+            center_bottom = bounds.bottom + (res[1] / 2)
+
+            if center_bottom > center_top:
+                logging.warning(
+                    ' ===> Coords "center_bottom": ' + str(center_bottom) + ' is greater than "center_top": '
+                    + str(center_top) + '. Try to inverse the bottom and top coords. ')
+                center_tmp = center_top
+                center_top = center_bottom
+                center_bottom = center_tmp
+
+            lon = np.arange(center_left, center_right + np.abs(res[0] / 2), np.abs(res[0]), float)
+            lat = np.flip(np.arange(center_bottom, center_top + np.abs(res[1] / 2), np.abs(res[1]), float), axis=0)
+            lons, lats = np.meshgrid(lon, lat)
+
+            lat_upper = lats[0, 0]
+            lat_lower = lats[-1, 0]
+            if lat_lower > lat_upper:
+                lats = np.flipud(lats)
+                values = np.flipud(values)
+
+            file_geo_x, file_geo_y = deepcopy(lons), deepcopy(lats)
+            file_values = deepcopy(values)
+
     else:
         alg_logger.error(' ===> File static source grid "' + file_name + '" is not available')
         raise FileNotFoundError('File is mandatory to correctly run the algorithm')
 
-    return file_geo_x, file_geo_y
+    return file_values, file_geo_x, file_geo_y
 # ----------------------------------------------------------------------------------------------------------------------

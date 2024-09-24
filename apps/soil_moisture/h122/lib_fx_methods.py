@@ -62,7 +62,8 @@ def adapt_data(obj_collections_src, var_name_geo_x='longitude', var_name_geo_y='
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to resample data
-def resample_data(obj_data_src, geo_x_values_src, geo_y_values_src, geo_x_values_dst, geo_y_values_dst, **kwargs):
+def resample_data(obj_data_src, geo_x_values_src, geo_y_values_src, geo_x_values_dst, geo_y_values_dst,
+                  geo_mask_dst=None, **kwargs):
 
     # iterate over variable(s)
     obj_data_dst = {}
@@ -75,9 +76,18 @@ def resample_data(obj_data_src, geo_x_values_src, geo_y_values_src, geo_x_values
                 var_settings = {}
 
             var_values_dst, _, _ = resample_points_to_grid(
-                var_values_src, geo_x_values_src, geo_y_values_src, geo_x_values_dst, geo_y_values_dst, **var_settings)
+                var_values_src, geo_x_values_src, geo_y_values_src, geo_x_values_dst, geo_y_values_dst,
+                **var_settings)
 
             var_values_dst = np.flipud(var_values_dst)
+            var_values_dst[geo_mask_dst == 0] = np.nan
+
+            ''' debug
+            plt.figure()
+            plt.imshow(var_values_dst)
+            plt.colorbar()
+            plt.show()
+            '''
 
             obj_data_dst[var_name] = var_values_dst
         else:
