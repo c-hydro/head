@@ -10,7 +10,7 @@ __author__ =
 __library__ = 'head'
 
 General command line:
-python app_sm_h122_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
+python app_precipitation_h64_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Version(s):
 20240607 (1.0.0) --> First development

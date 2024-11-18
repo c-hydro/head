@@ -107,7 +107,16 @@ def read_file_nc(file_name, file_variables=None):
 
     vars_obj = list(file_obj.values())
     if all(var is None for var in vars_obj):
-        alg_logger.warning(' ===> File name "' + file_name + '" has no valid variable(s)')
+        alg_logger.warning(' ===> File name "' + file_name + '" has no valid values for variable(s). '
+                                                             'Datasets will be defined by NoneType')
+        file_obj = None
+
+    if any(var is None for var in vars_obj):
+        for var_name, var_data in file_obj.items():
+            if var_data is None:
+                alg_logger.warning(' ===> File name "' + file_name + '" has no valid values for "'
+                                   + var_name + '" variable(s). Datasets will be defined by NoneType')
+
         file_obj = None
 
     return file_obj

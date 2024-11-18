@@ -10,7 +10,7 @@ __author__ =
 __library__ = 'head'
 
 General command line:
-python app_snow_h13_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
+python app_snow_h10_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Version(s):
 20240610 (5.0.0) --> Refactor to head package

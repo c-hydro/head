@@ -2,11 +2,12 @@
 Changelog
 =========
 
-Version 1.1.0 [2024-08-22]
+Version 1.1.0 [2024-11-18]
 **************************
 PACKAGE: operational release
 
 PRODUCTS:
+	- H61: fix bug for managing file with defined/not defined variable(s);
 	- H122: add feature to mask data using a binary file.
 
 

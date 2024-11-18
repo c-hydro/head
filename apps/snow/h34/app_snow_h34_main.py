@@ -10,7 +10,7 @@ __author__ =
 __library__ = 'head'
 
 General command line:
-python app_snow_h13_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
+python app_snow_h34_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Version(s):
 20240605 (1.0.0) --> First development
