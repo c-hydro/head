@@ -7,11 +7,11 @@
   },
   "template": {
     "datetime_source": "%Y%m%d_%H%M",
-    "sub_path_source": "%Y/%m/%d/%H",
+    "sub_path_source": "%Y/%m/%d/",
     "datetime_ancillary": "%Y%m%d_%H%M",
-    "sub_path_ancillary": "%Y/%m/",
+    "sub_path_ancillary": "%Y/%m/%d/",
     "datetime_destination": "%Y%m%d_%H%M",
-    "sub_path_destination": "%Y/%m/"
+    "sub_path_destination": "%Y/%m/%d/"
   },
   "methods": {
     "resample_data": {
