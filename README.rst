@@ -1,54 +1,36 @@
-Flood PROOFS Modelling System
-=============================
+Hsaf Engines and Analysis Data
+==============================
 
-Welcome to the **Flood-PROOFS Modelling System** GitHub repository. This is a Modelling System supported by the Italian Civil Department (DPC) and is used for preventing and reducing hydrogeological risk.
+Welcome to the **Hsaf Engines and Analysis Data** GitHub repository [HEAD]. This is a algorithm package supported by the Italian Civil Department (DPC) and is used for preventing and reducing hydrogeological risk.
 
 Background
 **********
 
-**Flood-PROOFS** (Flood PRObabilistic Operative Forecasting System) is a system designed by CIMA Research Foundation to support decision makers during the operational phases of flood forecasting and monitoring. The goal is to protect the population and infrastructure from damage caused by intense precipitation events.
+**HEAD** is a package designed by CIMA Research Foundation to support decision makers during the operational phases of flood forecasting and monitoring. The goal is to protect the population and infrastructure from damage caused by intense precipitation events.
 
-The Flood-PROOFS system manages the data flow deriving from various modelling tools developed by the CIMA Research Foundation to return a quantitative assessment of the effects that precipitation can have on the territory in terms of flow and probability to overcome the critical thresholds in the different basins. 
-
-The system has been operating since 2008 at various Functional Centers (Autonomous Region of Valle d'Aosta and Marche) where it is used for the issue of hydro-meteorological warnings for civil protection purposes. At the technical offices of the Valle d'Aosta Water Company (CVA) it is instead useful to study and implement strategies to mitigate flood events or to secure facilities in the event of flooding.
-
-Components
-**********
-
-The Flood-PROOFS forecasting chain consists in the following different parts, which are summarized as follows:
-
-    • **Processing**: tools to organize input and output datasets written in python3 language usually named **Hydrological Data Engines [hyde]** package;
-    • **Simulation**: tools to set and run Hydrological Model Continuum (HMC) written both in python3 and fortran programming language usually named **Hydrological Model Continuum [hmc]** package;
-    • **Publishing and Visualization**: tools to control, view and analyze results written both in python3 and R programming language usually named as **Hydrological Analysis tools [hat]** package;
-    • **Labs**: laboratories for running components of the modelling system, for trainings and educational use;
-    • **Utilities**: common functionality required by the previous components.
-
-All codes and datasets are freely available and users can be get them from our github repository [1_].
+The HEAD package is used in operating systems since 2014 (various Functional Centers (Autonomous Region of Valle d'Aosta and Marche) and it is used for the issue of hydro-meteorological warnings for civil protection purposes. 
 
 Prerequisites
 *************
 
-In order to use the Flood-PROOFS forecasting chain, users are strongly raccomanted to control if the following characteristics, libraries and packages are available and correctly installed on their machine.
+In order to use the HEAD package, users are strongly raccomanted to control if the following characteristics, libraries and packages are available and correctly installed on their machine.
 
-Usually, Flood-PROOFS libraries are installed on **Linux Debian/Ubuntu 64bit** environment and all libraries, packages and applications must be compilled and/or installed in according with this operative system.
+Usually, HEAD package is installed on **Linux Debian/Ubuntu 64bit** environment and all libraries, packages and applications must be compilled and/or installed in according with this operative system.
 
-All codes, subroutines and scripts are developed using both **Python** (version 3 and greater) [2_] and **Fortran** (version 2003 and greater) [3_]. QGIS geographic information system (version 2.18 and greater) [4_] is used to develop tools to organize, create and control static and dynamic datasets. R (version 3.4.4 and greater) [5_] is used to perform statistical analysis.
+All codes, subroutines and scripts are developed using both **Python** (version 3 and greater) [2_]. QGIS geographic information system (version 2.18 and greater) [4_] is used to develop tools to organize, create and control static and dynamic datasets. R (version 3.4.4 and greater) [5_] is used to perform statistical analysis.
 
 The libraries and the packages are mainly divided in four categories:
 
-    • python3 packages and applications;
-    • R packages and applications;
-    • fortran libraries;
+    • python packages and applications;
     • other software and applications (Jupyter Notebook, QGIS, Panoply, cdo, ncview ...).
 
-The section for installing all needed libraries and environments is usually named **fp-envs** and the users can find it in Flood-PROOFS
-modelling system repository hosted by GitHub [1_].
+The section for installing all needed libraries and environments is usually named **envs** and the users can find it in the repository hosted by GitHub [1_].
 
-Python3 libraries
+Python libraries
 -----------------
 
-The python3 standard library is not sufficient to correctly install all Flood-PROOFS applications; for this reason some extra libraries are needed to guarantee all functionalities. 
-To install all python3 libraries a bash script named **setup_fp_env_python.sh** is provided [6_]; basically, the script calls a **miniconda** [7_] installation that allow to get all needed libraries and install them into “$HOME/user/fp_libs_python/” folder. During the installation, a virtual environment named “fp_env_python” is created too.
+The python standard library is not sufficient to correctly install all Flood-PROOFS applications; for this reason some extra libraries are needed to guarantee all functionalities. 
+To install all python libraries a bash script named **setup_fp_env_python.sh** is provided [6_]; basically, the script calls a **miniconda** [7_] installation that allow to get all needed libraries and install them into “$HOME/user/fp_libs_python/” folder. During the installation, a virtual environment named “fp_env_python” is created too.
 Once all libraries are correctly installed and configurated, to activate “fp_env_python” by command-line is necessary to execute the following:
 
 .. code-block:: bash
@@ -63,24 +45,6 @@ By default, the **fp_env_python** environment is shown in parentheses () or brac
    (fp_env_python) >> 
 
 Activating the virtual enviroment permits to use a correct configuration andall applications and scripts of Flood-PROOFS forecasting chain will work properly.
-
-Fortran libraries
------------------
-
-Hydrological model Continuum needs netcdf4 library to read input provided by other preprocessing tools and to write output for external applications (such as Panoply, cdo, ncview ...).
-To set and compile netcdf4 library a bash script named **setup_fp_env_system.sh** is provided. 
-Script downloads **zlib** [8_], **hdf5** [9_] and **netcdf4** [10_] libraries from their repositories; after downloading source compressed archives, script creates a folder in “$HOME/user/fp_libs_system/” where all libraries will be compilled and installed. During the installation, a environment file named “fp_env_system” is created for saving LD_LIBRARY_PATH (for native code libraries) and PATH (for executables) references of installed libraries.
-
-HMC libraries
--------------
-After preparing all necessary libraries and environmental settings, source files of HMC must be compiled to run properly [11_]; usually, sources are compiled using **GNU compilers** (such as gcc and gfortran) that have to be installed on user’s machine. To compile and optimize HMC codes a bash file named **setup_fp_env_hmc.sh** is provided. Using this setup file, user will have to answer some questions about how to compile HMC codes.
-Usually, to build Continuum for production use, options have to set as follows:
-
-    • set compiler type [1] for using GNU/GFortran compiler;
-    • set optimization option [2] for using production mode; 
-    • set profiler option [2] for skipping profiling used to control model performances;
-    • set NetCDF4 library [1] for using NetCDF4 input and output files format.
-
 
 Potential Users
 ***************
