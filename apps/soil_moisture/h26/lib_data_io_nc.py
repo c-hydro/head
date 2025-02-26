@@ -14,6 +14,7 @@ import os
 import numpy as np
 import pandas as pd
 import xarray as xr
+import h5py
 
 from copy import deepcopy
 
@@ -87,7 +88,13 @@ def read_file_nc(file_name, file_variables=None, var_name_geo_x='longitude', var
     if os.path.exists(file_name):
 
         # open file
-        file_dset = xr.open_dataset(file_name)
+        try:
+            file_dset = xr.open_dataset(file_name)
+        except BaseException as b_exp:
+            alg_logger.warning(' ===> File "' + file_name + '" errors in opening file "' +
+                               str(b_exp) + '". Return NoneType')
+            data_obj, geo_obj = None, None
+            return data_obj, geo_obj
 
         # check coords
         tmp_geo_x_1d = file_dset['lon'].values

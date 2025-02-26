@@ -95,7 +95,14 @@ def read_file_nc(file_name, file_variables=None, file_time_reference=None,
             file_time_reference = pd.Timestamp(file_time_reference)
 
         # open file
-        file_dset = xr.open_dataset(file_name)
+        try:
+            file_dset = xr.open_dataset(file_name)
+        except BaseException as b_exp:
+            alg_logger.warning(' ===> File "' + file_name + '" errors in opening file "' +
+                               str(b_exp) + '". Return NoneType')
+            data_obj, attrs_obj, geo_obj, time_obj = None, None, None, None
+            return data_obj, attrs_obj, geo_obj, time_obj
+
         file_n_obs = file_dset.coords[var_name_obs].shape[0]
 
         # organize attrs obj

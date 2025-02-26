@@ -1,0 +1,29 @@
+# activate python virtualenv
+PATH=./conda/bin:$PATH
+export PATH
+source activate head_runner_libraries
+
+# add libraries
+pip install pyresample
+pip install repurpose
+
+# install eccodes binaries and then install pygrib:
+git clone https://github.com/jswhit/pygrib package_pygrib
+cd package_pygrib
+ECCODES_DIR=/root/library/eccodes/ python setup.py install
+
+conda install -c conda-forge eccodes
+conda install -c conda-forge python-eccodes
+
+python -m eccodes selfcheck
+#Found: ecCodes v2.23.0.
+#Library: /root/envs/conda_head/envs/head_runner_libraries/lib/libeccodes.so
+#Definitions: /root/envs/conda_head/envs/head_runner_libraries/share/eccodes/definitions
+#Samples: /root/envs/conda_head/envs/head_runner_libraries/share/eccodes/samples
+#Your system is ready.
+
+pip install cfgrib
+
+python -m cfgrib selfcheck
+#Found: ecCodes v2.23.0.
+#Your system is ready.

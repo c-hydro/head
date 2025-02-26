@@ -192,45 +192,52 @@ class DrvData:
                                 file_path_tmp_step, file_time_reference=alg_time_now,
                                 file_variables=self.variables_src)
 
-                            # organize variable(s) source
-                            vars_src_step = organize_data(obj_data_src, obj_geo_src, **self.settings_organize_data)
-                            # organize time(s) source
-                            time_src_step = organize_time(obj_time_src, time_index='time_creation')
-                            # organize attr(s) source
-                            attrs_src_step = organize_attrs(obj_attrs_src, attr_index='date_created_utc')
+                            # check data source
+                            if obj_data_src is not None:
 
-                            # check variable dataframe availability
-                            if not vars_src_step.empty:
-                                # store variable(s) source
-                                if vars_src_collection is None:
-                                    vars_src_collection = deepcopy(vars_src_step)
-                                else:
-                                    vars_src_collection = pd.concat([vars_src_collection, vars_src_step], axis=0)
+                                # organize variable(s) source
+                                vars_src_step = organize_data(obj_data_src, obj_geo_src, **self.settings_organize_data)
+                                # organize time(s) source
+                                time_src_step = organize_time(obj_time_src, time_index='time_creation')
+                                # organize attr(s) source
+                                attrs_src_step = organize_attrs(obj_attrs_src, attr_index='date_created_utc')
 
-                            # check time dataframe availability
-                            if not time_src_step.empty:
-                                # store time source
-                                if time_src_collection is None:
-                                    time_src_collection = deepcopy(time_src_step)
-                                else:
-                                    time_src_collection = pd.concat([time_src_collection, time_src_step], axis=0)
+                                # check variable dataframe availability
+                                if not vars_src_step.empty:
+                                    # store variable(s) source
+                                    if vars_src_collection is None:
+                                        vars_src_collection = deepcopy(vars_src_step)
+                                    else:
+                                        vars_src_collection = pd.concat([vars_src_collection, vars_src_step], axis=0)
 
-                            # check attrs dataframe availability
-                            if not attrs_src_step.empty:
-                                # store attrs source
-                                if attrs_src_collection is None:
-                                    attrs_src_collection = deepcopy(attrs_src_step)
-                                else:
-                                    attrs_src_collection = pd.concat([attrs_src_collection, attrs_src_step], axis=0)
+                                # check time dataframe availability
+                                if not time_src_step.empty:
+                                    # store time source
+                                    if time_src_collection is None:
+                                        time_src_collection = deepcopy(time_src_step)
+                                    else:
+                                        time_src_collection = pd.concat([time_src_collection, time_src_step], axis=0)
 
-                            # delete uncompressed file (if needed)
-                            if self.compression_src:
-                                if os.path.exists(file_path_tmp_step):
-                                    os.remove(file_path_tmp_step)
+                                # check attrs dataframe availability
+                                if not attrs_src_step.empty:
+                                    # store attrs source
+                                    if attrs_src_collection is None:
+                                        attrs_src_collection = deepcopy(attrs_src_step)
+                                    else:
+                                        attrs_src_collection = pd.concat([attrs_src_collection, attrs_src_step], axis=0)
 
-                            # info start file step
-                            alg_logger.info(' ------> Read file "' + file_path_src_step + '" ... DONE ')
+                                # delete uncompressed file (if needed)
+                                if self.compression_src:
+                                    if os.path.exists(file_path_tmp_step):
+                                        os.remove(file_path_tmp_step)
 
+                                # info start file step
+                                alg_logger.info(' ------> Read file "' + file_path_src_step + '" ... DONE ')
+
+                            else:
+                                # info start file step
+                                alg_logger.info(' ------> Read file "' +
+                                                file_path_src_step + '" ... FAILED. File exists but data are corrupted')
                         else:
 
                             # info start file step

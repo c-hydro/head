@@ -165,22 +165,31 @@ class DrvData:
                     # get dataset source
                     obj_data_src, obj_geo_src = read_file_nc(file_path_tmp_step, file_variables=self.variables_src)
 
-                    # organize variable(s) source
-                    vars_src_step = organize_data(obj_data_src, obj_geo_src, **self.settings_organize_data)
+                    # check data source
+                    if obj_data_src is not None:
 
-                    # save variable(s) obj to ancillary file
-                    folder_name_anc_raw_step, file_name_anc_raw_step = os.path.split(file_path_anc_raw_step)
-                    make_folder(folder_name_anc_raw_step)
-                    write_file_obj(file_path_anc_raw_step, vars_src_step)
+                        # organize variable(s) source
+                        vars_src_step = organize_data(obj_data_src, obj_geo_src, **self.settings_organize_data)
 
-                    # delete uncompressed file (if needed)
-                    if self.compression_src:
-                        if os.path.exists(file_path_tmp_step):
-                            os.remove(file_path_tmp_step)
+                        # save variable(s) obj to ancillary file
+                        folder_name_anc_raw_step, file_name_anc_raw_step = os.path.split(file_path_anc_raw_step)
+                        make_folder(folder_name_anc_raw_step)
+                        write_file_obj(file_path_anc_raw_step, vars_src_step)
 
-                    # info end time step
-                    alg_logger.info(' ----> Time Step "' + alg_time_step.strftime(time_format_algorithm) +
-                                    '" ... DONE')
+                        # delete uncompressed file (if needed)
+                        if self.compression_src:
+                            if os.path.exists(file_path_tmp_step):
+                                os.remove(file_path_tmp_step)
+
+                        # info end time step
+                        alg_logger.info(' ----> Time Step "' + alg_time_step.strftime(time_format_algorithm) +
+                                        '" ... DONE')
+
+                    else:
+                        # info end time step
+                        alg_logger.info(' ----> Time Step "' + alg_time_step.strftime(time_format_algorithm) +
+                                        '" ... FAILED. File exists but data are corrupted')
+
                 else:
                     # info end time step
                     alg_logger.info(' ----> Time Step "' + alg_time_step.strftime(time_format_algorithm) +
