@@ -1,7 +1,7 @@
 {
   "flags": {
-    "reset_datasets_ancillary_raw": false,
-    "reset_datasets_ancillary_def": false,
+    "reset_datasets_ancillary_raw": true,
+    "reset_datasets_ancillary_def": true,
     "reset_datasets_destination": true,
     "reset_logs": true
   },
@@ -38,7 +38,7 @@
     "dynamic" : {
       "source": {
       	"__comment__" : "h61: h61_20240606_0400_01_fdk.nc.gz, h61_20240606_0600_24_fdk.nc.gz",
-        "folder_name": "/home/fabio/Desktop/Head_Workspace/ws/h61/data_dynamic/source/",
+        "folder_name": "/home/fabio/Desktop/Head_Workspace/ws/h61/data_dynamic/source/{sub_path_source}",
         "file_name": "h61_{datetime_source}_24_fdk.nc.gz",
         "compression": true,
         "format": "netcdf",

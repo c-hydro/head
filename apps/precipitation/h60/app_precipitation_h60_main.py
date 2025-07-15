@@ -3,8 +3,8 @@
 """
 HEAD APP - PRECIPITATION H60 PRODUCT  - HSAF Engines for Analyzing Datasets
 
-__date__ = '20240605'
-__version__ = '1.0.0'
+__date__ = '20250715'
+__version__ = '1.0.1'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org)'
 __library__ = 'head'
@@ -13,6 +13,7 @@ General command line:
 python app_precipitation_h60_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Version(s):
+20250715 (1.0.1) --> Fix bug for managing old and new file format (changed from 2025-07-01 to present)
 20240605 (1.0.0) --> First development
 """
 
@@ -42,8 +43,8 @@ alg_logger = logging.getLogger(logger_name)
 project_name = 'head'
 alg_name = 'Application for processing H60 precipitation product'
 alg_type = 'Package'
-alg_version = '1.0.0'
-alg_release = '2023-06-05'
+alg_version = '1.0.1'
+alg_release = '2025-07-15'
 # -------------------------------------------------------------------------------------
 
 

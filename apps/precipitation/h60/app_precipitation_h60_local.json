@@ -38,7 +38,7 @@
     "dynamic" : {
       "source": {
       	"__comment__" : "h60: h60_20240605_0145_fdk.nc.gz",
-        "folder_name": "/home/fabio/Desktop/Head_Workspace/ws/h60/data_dynamic/source/",
+        "folder_name": "/home/fabio/Desktop/Head_Workspace/ws/h60/data_dynamic/source/{sub_path_source}",
         "file_name": "h60_{datetime_source}_fdk.nc.gz",
         "compression": true,
         "format": "netcdf",

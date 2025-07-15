@@ -86,6 +86,28 @@ def read_file_nc(file_name, file_variables=None):
         # open file
         file_dset = xr.open_dataset(file_name)
 
+        # check file version
+        file_dims = list(file_dset.dims)
+        if file_dims == ['x', 'y']:
+            file_version = 1
+            alg_logger.warning(' ===> File has defined by format before 2025-07-01')
+        elif file_dims == ['nx', 'ny']:
+            alg_logger.warning(' ===> File has defined by format after 2025-07-01')
+            file_version = 2
+        else:
+            alg_logger.error(' ===> File has not expected dimensions: ' + str(file_dims))
+            raise ValueError('Expected dimensions are [x, y] or [nx, ny], but got: ' + str(file_dims))
+
+        ''' debug
+        import matplotlib.pylab as plt
+        values = file_dset['acc_rr'].values
+        plt.figure()
+        plt.imshow(values)
+        plt.colorbar()
+        plt.clim(0, 50)
+        plt.show()
+        '''
+
         # organize file obj
         file_obj = {}
         for var_name_out, var_name_in in file_variables.items():
@@ -103,12 +125,33 @@ def read_file_nc(file_name, file_variables=None):
                 file_obj[var_name_out] = None
     else:
         alg_logger.warning(' ===> File name "' + file_name + '" not found')
-        file_obj = None
+        file_version, file_obj = None, None
 
     vars_obj = list(file_obj.values())
     if all(var is None for var in vars_obj):
         alg_logger.warning(' ===> File name "' + file_name + '" has no valid variable(s)')
-        file_obj = None
+        file_version, file_obj = None, None
+
+    if file_obj is not None:
+        if file_version == 2:
+            tmp_obj = {}
+            for var_name, var_data in file_obj.items():
+                tmp_obj[var_name] = np.rot90(var_data, k=2)
+            file_obj = deepcopy(tmp_obj)
+
+    ''' debug
+    import matplotlib.pylab as plt
+    values = file_obj['rain']
+    plt.figure()
+    plt.imshow(values)
+    plt.colorbar()
+    plt.clim(0, 50)
+    plt.show()
+    '''
+
+    # set file version
+    if file_obj is not None:
+        file_obj['version'] = file_version
 
     return file_obj
 

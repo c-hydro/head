@@ -25,7 +25,7 @@ ftp_pwd=""
 if [ "$script_mode" == 'realtime' ]; then
 	ftp_folder_raw="/products/h64/h64_cur_mon_data/" # realtime
 elif [ "$script_mode" == 'history' ]; then 
-    ftp_folder_raw="/hsaf_archive/h64/%YYYY/%MM/%DD/%HH/" # history
+    ftp_folder_raw="/hsaf_archive/h64/%YYYY/%MM/%DD/" # history
 else 
     printf "This program requires 'history' or 'realtime' mode\n" 1>&2
     exit 1

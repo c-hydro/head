@@ -107,15 +107,19 @@ def organize_data(obj_data, geo_x_values, geo_y_values,
     obj_geo = {var_name_geo_x: geo_x_values.flatten(), var_name_geo_y: geo_y_values.flatten()}
 
     # define variable obj
-    obj_variable = {}
+    obj_variable, obj_attrs = {}, {}
     for var_name, var_data in obj_data.items():
         if var_data is None:
             var_data = np.zeros((n_data, 1))
             var_data[:] = np.nan
+            obj_variable[var_name] = var_data
             alg_logger.warning(' ===> Data "' + var_name + '" is not available in the datasets')
         else:
-            var_data = var_data.flatten()
-        obj_variable[var_name] = var_data
+            if var_name == 'version':
+                obj_attrs[var_name] = var_data
+            else:
+                var_data = var_data.flatten()
+                obj_variable[var_name] = var_data
 
     # define collections obj
     obj_collections = {**obj_variable, **obj_geo}
@@ -124,6 +128,9 @@ def organize_data(obj_data, geo_x_values, geo_y_values,
     obj_dframe = pd.DataFrame(data=obj_collections)
     obj_dframe = obj_dframe.dropna(axis=0, how='any')
     obj_dframe.reset_index(drop=True, inplace=True)
+
+    # add attributes to data frame
+    obj_dframe.attrs = obj_attrs
 
     return obj_dframe
 

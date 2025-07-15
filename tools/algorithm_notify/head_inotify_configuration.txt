@@ -1,0 +1,147 @@
+## -------------------------------------------------------------------------------------
+## WATCH AND RSYNC FILES - SET UP EXAMPLE
+
+## LIBRARY:
+apt-get install inotify-tools
+apt-get install rsync
+## -------------------------------------------------------------------------------------
+
+## -------------------------------------------------------------------------------------
+## GOAL:
+To set up inotifywait as a service that runs in the background and checks 
+for new files added to a folder, you can create a systemd service. 
+Here are the steps to do that:
+## -------------------------------------------------------------------------------------
+
+## -------------------------------------------------------------------------------------
+1) CREATE THE BASH SCRIPT 
+First, make sure you have the Bash script ready. 
+Here's an example script that waits for new files, checks if they are fully copied, a
+nd uses rsync to transfer them to another server:
+
+"""
+#!/bin/bash
+
+# Directory to monitor
+DIR_TO_WATCH="/path/to/your/folder"
+
+# File template pattern (e.g., '*.txt' for all text files)
+FILE_TEMPLATE="*.txt"
+
+# Destination server and path for rsync
+DEST_SERVER="user@remote.server:/path/to/destination/folder"
+
+# Function to check if a file is still being copied
+is_file_being_copied() {
+  local file=$1
+  local size1=$(stat -c %s "$file")
+  sleep 1
+  local size2=$(stat -c %s "$file")
+  [ "$size1" -ne "$size2" ]
+}
+
+# Function to rsync the file to the destination server
+rsync_file() {
+  local file=$1
+  rsync -avz "$file" "$DEST_SERVER"
+  echo "File $file has been rsynced to $DEST_SERVER"
+}
+
+# Command to run when a new file matching the template is detected
+inotifywait -m -e create --format '%w%f' "$DIR_TO_WATCH" | while read NEW_FILE
+do
+  if [[ "$NEW_FILE" == $DIR_TO_WATCH/$FILE_TEMPLATE ]]
+  then
+    echo "New file matching template detected: $NEW_FILE"
+    while is_file_being_copied "$NEW_FILE"
+    do
+      echo "File is still being copied: $NEW_FILE"
+      sleep 1
+    done
+    echo "File copy completed: $NEW_FILE"
+    rsync_file "$NEW_FILE"
+  fi
+done
+"""
+## -------------------------------------------------------------------------------------
+
+## -------------------------------------------------------------------------------------
+2) SAVE THE BASH SCRIPT
+Save the script to a file, 
+for example watch_and_rsync.sh, 
+and give it execute permissions:
+
+"""
+chmod +x /path/to/your/script/watch_and_rsync.sh
+"""
+## -------------------------------------------------------------------------------------
+
+## -------------------------------------------------------------------------------------
+3) CREATE THE SYSTEMD SERVICE FILE
+Create a new service file in 
+/etc/systemd/system/ directory, 
+for example, watch_and_rsync.service:
+
+"""
+[Unit]
+Description=Watch Folder and Rsync New Files
+After=network.target
+
+[Service]
+ExecStart=/path/to/your/script/watch_and_rsync.sh
+Restart=always
+User=your_username
+Group=your_group
+
+[Install]
+WantedBy=multi-user.target
+"""
+## -------------------------------------------------------------------------------------
+
+## -------------------------------------------------------------------------------------
+4) RELOAD SYSTEMD
+Reload the systemd manager configuration to apply the new service:
+
+"""
+sudo systemctl daemon-reload
+"""
+## -------------------------------------------------------------------------------------
+
+
+## -------------------------------------------------------------------------------------
+5) ENABLE THE SERVICE
+Enable the service to start on boot:
+
+"""
+sudo systemctl enable head_notify_files_precipitation_h60.service
+"""
+## -------------------------------------------------------------------------------------
+
+## -------------------------------------------------------------------------------------
+6) START THE SERVICE
+Start the service immediately:
+
+"""
+sudo systemctl start head_notify_files_precipitation_h60.service
+"""
+## -------------------------------------------------------------------------------------
+
+## -------------------------------------------------------------------------------------
+7) CHECK THE SERVICE
+Verify that the service is running:
+
+"""
+sudo systemctl status head_notify_files_precipitation_h60.service
+"""
+## -------------------------------------------------------------------------------------
+
+## -------------------------------------------------------------------------------------
+## CONCLUSIONS
+By following these steps, your inotifywait script will 
+run as a service, monitoring the specified 
+directory for new files matching the defined template 
+and transferring them using rsync after ensuring 
+they are fully copied.
+## -------------------------------------------------------------------------------------
+
+

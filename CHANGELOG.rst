@@ -2,6 +2,18 @@
 Changelog
 =========
 
+Version 1.3.0 [2025-07-15]
+**************************
+PACKAGE: operational release
+
+PRODUCTS:
+	- H60: fix errors in managing old and new file formats;
+	- H61: fix errors in managing old and new file formats.
+
+EXAMPLE:
+	- H60: add figures before and after the 2025-07-01 (change file format date);
+	- H61: add figures before and after the 2025-07-01 (change file format date).
+
 Version 1.2.0 [2025-02-26]
 **************************
 PACKAGE: operational release

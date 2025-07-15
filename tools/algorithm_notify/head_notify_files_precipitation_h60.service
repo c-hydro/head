@@ -1,0 +1,12 @@
+[Unit]
+Description=Notify New Files
+After=network.target
+
+[Service]
+ExecStart=/root/projects/hsaf/algorithm_notify/head_notify_files_precipitation_h60.sh
+Restart=always
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
