@@ -109,6 +109,10 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+conda/
+
+# files created by conda
+miniconda.sh
 
 # Spyder project settings
 .spyderproject
@@ -127,3 +131,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# project file and workspace
+example/

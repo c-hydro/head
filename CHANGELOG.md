@@ -7,6 +7,8 @@ PACKAGE: operational release
 DOWNLOADER:
 	- H60: add lock file to avoid multiple accesses during the file download;
 	- H61: add lock file to avoid multiple accesses during the file download.
+	- H29: add lock file to avoid multiple accesses during the file download;
+	- H122: add lock file to avoid multiple accesses during the file download.
 
 ### Version 1.3.0 [2025-07-15]
 PACKAGE: operational release
