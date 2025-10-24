@@ -1,6 +1,13 @@
 =========
 # Changelog
 
+### Version 1.4.0 [2025-10-24]
+PACKAGE: operational release
+
+DOWNLOADER:
+	- H60: add lock file to avoid multiple accesses during the file download;
+	- H61: add lock file to avoid multiple accesses during the file download.
+
 ### Version 1.3.0 [2025-07-15]
 PACKAGE: operational release
 
