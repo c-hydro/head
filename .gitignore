@@ -109,10 +109,6 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-conda/
-
-# files created by conda
-miniconda.sh
 
 # Spyder project settings
 .spyderproject
@@ -134,3 +130,12 @@ dmypy.json
 
 # project file and workspace
 example/
+docs/
+dset/
+conda/
+
+# files created by conda
+miniconda.sh
+/example/
+/example/h60/
+/example/h61/
