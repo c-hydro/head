@@ -1,9 +1,7 @@
 =========
-Changelog
-=========
+# Changelog
 
-Version 1.3.0 [2025-07-15]
-**************************
+### Version 1.3.0 [2025-07-15]
 PACKAGE: operational release
 
 PRODUCTS:
@@ -14,8 +12,7 @@ EXAMPLE:
 	- H60: add figures before and after the 2025-07-01 (change file format date);
 	- H61: add figures before and after the 2025-07-01 (change file format date).
 
-Version 1.2.0 [2025-02-26]
-**************************
+### Version 1.2.0 [2025-02-26]
 PACKAGE: operational release
 
 PRODUCTS:
@@ -27,16 +24,14 @@ TOOLS:
 		- H16, H103, H122: [METOP] add executable to download the soil moisture data from ftp service.
 		- H26: [ECMWF] add executable to run the algorithm of soil moisture products.
 
-Version 1.1.0 [2024-11-18]
-**************************
+### Version 1.1.0 [2024-11-18]
 PACKAGE: operational release
 
 PRODUCTS:
 	- H61: fix bug for managing file with defined/not defined variable(s);
 	- H122: add feature to mask data using a binary file.
 
-Version 1.0.0 [2024-06-01]
-**************************
+### Version 1.0.0 [2024-06-01]
 PACKAGE: beta release (first development and codes refactoring)
 
 PRODUCTS:
@@ -61,4 +56,3 @@ TOOLS:
 	- SHRINKER:
 		- method to shrinker soil moisture data;
 		- method to shrinker snow data.
-
