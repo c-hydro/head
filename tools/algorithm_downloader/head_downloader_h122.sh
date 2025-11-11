@@ -5,8 +5,8 @@ IFS=$'\n\t'
 # ----------------------------------------------------------------------------------------
 # Script information
 script_name='HEAD DOWNLOADER - HSAF SOIL MOISTURE H122 (ASCAT METOP A/B/C)'
-script_version="1.0.0"
-script_date='2025/10/24'
+script_version="1.2.0"
+script_date='2025/11/11'
 
 # ========================================================================================
 # Parse arguments (currently: -f/--force)
@@ -22,7 +22,7 @@ done
 # Allow up to N concurrent script instances (set to 1 for strict single instance)
 MAX_INSTANCES=2
 SEMAPHORE_TAG="hsaf_h122_downloader"
-LOCK_DIR="/tmp/${SEMAPHORE_TAG}.locks"
+LOCK_DIR="/share/LOCKS/${SEMAPHORE_TAG}.locks"
 mkdir -p "$LOCK_DIR"
 
 # If forced, stop old runs (excluding this PID) and clear stale locks
@@ -99,21 +99,9 @@ set net:reconnect-interval-base 5;
 set net:reconnect-interval-max 20;
 set ftp:passive-mode yes;
 set xfer:clobber on;
+# set cmd:trace yes;
 EOF
 )
-
-run_lftp() {
-  local lftp_body="$1"
-  timeout --preserve-status "${TIMEOUT_LFTP_SECS}" bash -c \
-  "lftp <<'LFTP_EOF'
-set ftp:proxy ${proxy}
-${LFTP_COMMON_SETTINGS}
-open -u ${ftp_usr},${ftp_pwd} ${ftp_url}
-${lftp_body}
-close
-quit
-LFTP_EOF"
-}
 
 # === Credential loader from ~/.netrc by machine label ===================================
 # Usage: load_netrc_creds <machine_label>
@@ -156,7 +144,7 @@ proxy=""
 # Mode: 'realtime' or 'history'
 script_mode='realtime'
 # Days back inclusive (0=today only)
-days=7
+days=1
 
 # Local path pattern (H122)
 local_folder_raw="/share/HSAF_SM/ascat/nrt/h122/%YYYY/%MM/%DD/%HH/"
@@ -171,6 +159,11 @@ fi
 
 # If you want to skip the *current* hour when too fresh (files still writing), set a lag:
 SAFETY_LAG_MIN=5   # minutes; applies only to current hour in realtime
+
+# ---- Per-file status toggle ------------------------------------------------------------
+# false = keep single-session mget flow (fast, per-hour status)
+# true  = per-file get with explicit SUCCESS/FAIL (one short connection per file)
+PER_FILE_LOG=true
 
 # ----------------------------------------------------------------------------------------
 # Anchors for realtime logic
@@ -195,6 +188,19 @@ load_netrc_creds "$netrc_machine_label"
 echo " ===> INFO MACHINE -- URL: ${ftp_url} -- NETRC: ${netrc_machine_label} -- USER: ${ftp_usr}"
 
 # ----------------------------------------------------------------------------------------
+# Build a single LFTP script with all transfers (used only when PER_FILE_LOG=false)
+LFTP_SCRIPT=""
+per_file_attempts=0   # counts files attempted in per-file mode
+added_cmds=0          # counts hour-level cmds added to LFTP_SCRIPT (single-session mode)
+
+# Base settings + connection (kept at the top of the script we’ll run once)
+LFTP_SCRIPT+=$'\n'"set ftp:proxy ${proxy};"
+LFTP_SCRIPT+=$'\n'"${LFTP_COMMON_SETTINGS}"
+LFTP_SCRIPT+=$'\n'"open -u ${ftp_usr},${ftp_pwd} ${ftp_url};"
+
+# Iterate over days/hours and either:
+#  - append to LFTP_SCRIPT (single-session), or
+#  - run per-file transfers directly (per-file mode)
 for day in $(seq 0 "$days"); do
   # Target date (local TZ)
   date_step=$(date -d "${time_now} -${day} days" +%Y%m%d)
@@ -219,12 +225,11 @@ for day in $(seq 0 "$days"); do
     count_end=0
   fi
 
-  # Descend hours (… HH, HH-1, …, 00)
   for hour in $(seq ${count_start} -1 ${count_end}); do
     hour_get=$(printf "%02d" ${hour})
     echo " ===> HOUR_STEP: $hour_get ===> START "
 
-    # If realtime & current hour is too fresh, skip (safety lag)
+    # Realtime current-hour safety lag
     if [ "$script_mode" == 'realtime' ] && [[ "$date_step" == "$now_day" && "$hour_get" == "$now_hour" ]]; then
       adj=$(( (10#$now_min - SAFETY_LAG_MIN) ))
       if (( adj < 0 )); then
@@ -246,70 +251,124 @@ for day in $(seq 0 "$days"); do
     local_folder_def=${local_folder_def/'%HH'/$hour_get}
     mkdir -p "$local_folder_def"
 
-    # H122 filenames contain many parts; we match **the processing timestamp hour**
-    # Pattern: *H122_C_LIIB_YYYYMMDDHH??????_*____.nc  (wildcards for minutes/seconds and intervals)
+    # Mask for the processing timestamp hour
     list_mask="*H122_C_LIIB_${date_step}${hour_get}*"
-    # More precise (if needed): list_mask="*H122_C_LIIB_${date_step}${hour_get}??????_*____.nc"
 
-    echo "  [INFO] Listing FTP folder for ${ftp_folder_def} (mask ${list_mask}) ..."
-    set +e
-    ftp_list=$(run_lftp "
-      cd ${ftp_folder_def}
-      cls -1 ${list_mask} | sort -r | sed -e 's/@//'
-    ")
-    list_rc=$?
-    set -e
+    if [ "${PER_FILE_LOG}" != "true" ]; then
+      # ---- Original single-session, per-hour status (fast) ----
+      LFTP_SCRIPT+=$'\n'"echo ===== [${date_step} ${hour_get}] begin =====;"
+      LFTP_SCRIPT+=$'\n'"cd ${ftp_folder_def};"
+      LFTP_SCRIPT+=$'\n'"lcd ${local_folder_def};"
+      LFTP_SCRIPT+=$'\n'"echo SRC: ${ftp_url}${ftp_folder_def};"
+      LFTP_SCRIPT+=$'\n'"echo DST: ${local_folder_def};"
+      LFTP_SCRIPT+=$'\n'"mget -c ${list_mask} && echo STATUS: SUCCESS [${date_step} ${hour_get}] || echo STATUS: FAIL [${date_step} ${hour_get}];"
+      LFTP_SCRIPT+=$'\n'"echo ===== [${date_step} ${hour_get}] end =====;"
+      added_cmds=$((added_cmds+1))
+    else
+      # ---- Per-file logging mode (exact SRC/DST/file + SUCCESS/FAIL) ----
+      echo "----- [${date_step} ${hour_get}] listing files: mask='${list_mask}'"
+      # 1) List files for this hour (remote) and capture into bash array
+      set +e
+      mapfile -t file_list < <(
+        lftp -u "${ftp_usr},${ftp_pwd}" "${ftp_url}" <<LFTP_LIST
+${LFTP_COMMON_SETTINGS}
+set ftp:proxy ${proxy};
+open ${ftp_url}
+cd ${ftp_folder_def}
+cls -1 ${list_mask}
+quit
+LFTP_LIST
+      )
+      list_rc=$?
+      set -e
 
-    if [[ $list_rc -ne 0 ]]; then
-      echo "  [WARN] FTP list failed for hour ${hour_get} (rc=$list_rc). Going to previous hour."
-      echo " ===> HOUR_STEP: $hour_get ===> END "
-      continue
-    fi
-
-    if [[ -z "${ftp_list//[[:space:]]/}" ]]; then
-      echo "  [WARN] No files published on FTP for ${date_step} hour ${hour_get}. Going to previous hour."
-      echo " ===> HOUR_STEP: $hour_get ===> END "
-      continue
-    fi
-
-    # Download every file from the list that we don't already have
-    # Filenames can include commas; iterate line-by-line safely
-    echo "  [INFO] Found $(echo "$ftp_list" | wc -l) file(s) on FTP for this hour."
-    while IFS= read -r ftp_file; do
-      [[ -z "$ftp_file" ]] && continue
-      local_target="${local_folder_def}/${ftp_file}"
-
-      echo -n "  [FILE] ${ftp_file} ... "
-      if [[ -e "$local_target" ]]; then
-        echo "SKIP (already downloaded)"
+      if [[ $list_rc -ne 0 ]]; then
+        echo "SRC: ${ftp_url}${ftp_folder_def}"
+        echo "DST: ${local_folder_def}"
+        echo "STATUS: LIST_FAIL [${date_step} ${hour_get}] (rc=${list_rc})"
+        echo "----- [${date_step} ${hour_get}] end (list failed)"
+        echo " ===> HOUR_STEP: $hour_get ===> END "
         continue
       fi
 
-      echo -n "downloading ... "
-      set +e
-      run_lftp "
-        cd ${ftp_folder_def}
-        get -c -O ${local_folder_def} ${ftp_file}
-      " >/dev/null
-      dl_rc=$?
-      set -e
-
-      if [[ $dl_rc -eq 0 ]]; then
-        echo "DONE"
-      elif [[ $dl_rc -eq 124 ]]; then
-        echo "TIMEOUT"
-        [[ -f "$local_target" ]] && rm -f "$local_target"
-      else
-        echo "FAILED (rc=$dl_rc)"
-        [[ -f "$local_target" ]] && rm -f "$local_target"
+      # If no files, print and continue
+      if [ "${#file_list[@]}" -eq 0 ] || { [ "${#file_list[@]}" -eq 1 ] && [ -z "${file_list[0]// /}" ]; }; then
+        echo "SRC: ${ftp_url}${ftp_folder_def}"
+        echo "DST: ${local_folder_def}"
+        echo "STATUS: NO_FILES [${date_step} ${hour_get}]"
+        echo "----- [${date_step} ${hour_get}] end (no files)"
+        echo " ===> HOUR_STEP: $hour_get ===> END "
+        continue
       fi
-    done <<< "$ftp_list"
+
+      # 2) For each file, run a short controlled download and print per-file status
+      for fname in "${file_list[@]}"; do
+        # Defensive trim
+        fname="$(echo -n "${fname}" | tr -d '\r')"
+        [ -z "${fname}" ] && continue
+
+        echo "SRC: ${ftp_url}${ftp_folder_def}/${fname}"
+        echo "DST: ${local_folder_def}${fname}"
+
+        set +e
+        timeout --preserve-status "${TIMEOUT_LFTP_SECS}" lftp -u "${ftp_usr},${ftp_pwd}" "${ftp_url}" <<LFTP_GET
+${LFTP_COMMON_SETTINGS}
+set ftp:proxy ${proxy};
+open ${ftp_url}
+cd ${ftp_folder_def}
+lcd ${local_folder_def}
+get -c "${fname}"
+quit
+LFTP_GET
+        rc_file=$?
+        set -e
+
+        per_file_attempts=$((per_file_attempts+1))
+        if [[ ${rc_file} -eq 0 ]]; then
+          echo "STATUS: SUCCESS [${date_step} ${hour_get}] FILE: ${fname}"
+        elif [[ ${rc_file} -eq 124 ]]; then
+          echo "STATUS: TIMEOUT [${date_step} ${hour_get}] FILE: ${fname}"
+        else
+          echo "STATUS: FAIL [${date_step} ${hour_get}] FILE: ${fname} (rc=${rc_file})"
+        fi
+      done
+
+      echo "----- [${date_step} ${hour_get}] end (per-file)"
+    fi
 
     echo " ===> HOUR_STEP: $hour_get ===> END "
   done
 
   echo " ===> TIME_STEP: $date_step ===> END "
 done
+
+# If we appended commands for single-session mode, run them now
+if [ "${PER_FILE_LOG}" != "true" ] && (( added_cmds > 0 )); then
+  # Close the single LFTP session cleanly at the end
+  LFTP_SCRIPT+=$'\n'"close;"
+  LFTP_SCRIPT+=$'\n'"quit;"
+
+  echo " [LFTP] Starting single-session transfer (timeout ${TIMEOUT_LFTP_SECS}s)..."
+  set +e
+  timeout --preserve-status "${TIMEOUT_LFTP_SECS}" bash -c "lftp <<'LFTP_EOF'
+${LFTP_SCRIPT}
+LFTP_EOF"
+  rc=$?
+  set -e
+
+  if [[ $rc -eq 0 ]]; then
+    echo " [LFTP] Session completed successfully."
+  elif [[ $rc -eq 124 ]]; then
+    echo " [LFTP] Session timed out after ${TIMEOUT_LFTP_SECS}s."
+  else
+    echo " [LFTP] Session exited with rc=$rc."
+  fi
+fi
+
+# If nothing happened in either mode, say so and exit
+if (( added_cmds == 0 )) && (( per_file_attempts == 0 )); then
+  echo " [INFO] Nothing to do (no eligible hours/files). Exiting."
+fi
 
 echo " ==> $script_name (Version: $script_version Release_Date: $script_date)"
 echo " ==> ... END"

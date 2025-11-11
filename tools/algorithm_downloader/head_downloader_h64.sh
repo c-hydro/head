@@ -1,209 +1,273 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
 
-# ----------------------------------------------------------------------------------------
+# =======================================================================================
 # Script information
 script_name='HEAD DOWNLOADER - HSAF PRODUCT PRECIPITATION H64 - REALTIME'
-script_version="2.5.0"
-script_date='2024/06/07'
+script_version="2.4.1"
+script_date='2025/11/11'
+# =======================================================================================
 
-# script mode
-script_mode='realtime' # 'history' or 'realtime' 
-# script period
-days=10
-# Script argument(s)
-local_folder_raw="/share/HSAF_PRECIPITATION/nrt/h64/%YYYY/%MM/%DD/"
+# -------------------------------------
+# Defaults (override via environment)
+# -------------------------------------
+DATA_FOLDER_RAW="${DATA_FOLDER_RAW:-/share/HSAF_PRECIPITATION/nrt/h64/%YYYY/%MM/%DD/}"
+DAYS="${DAYS:-10}"
+START_DATE_UTC="${START_DATE_UTC:-today}"
 
-# script ftp settings
-proxy=""
+# If set, download to staging first, then move into DATA_FOLDER_RAW
+STAGING_DIR="${STAGING_DIR:-}"   # e.g., /tmp/hsaf_staging
 
-ftp_machine="ftphsaf.meteoam.it"
-ftp_url="ftphsaf.meteoam.it"
-ftp_usr="" 
-ftp_pwd=""
+PROXY="${PROXY:-}"
 
-# check mode to choose ftp folder
-if [ "$script_mode" == 'realtime' ]; then
-	ftp_folder_raw="/products/h64/h64_cur_mon_data/" # realtime
-elif [ "$script_mode" == 'history' ]; then 
-    ftp_folder_raw="/hsaf_archive/h64/%YYYY/%MM/%DD/" # history
-else 
-    printf "This program requires 'history' or 'realtime' mode\n" 1>&2
-    exit 1
-fi 
-# ----------------------------------------------------------------------------------------
+FTP_URL="${FTP_URL:-ftphsaf.meteoam.it}"
+FTP_USR="${FTP_USR:-${HSAF_FTP_USER:-}}"
+FTP_PWD="${FTP_PWD:-${HSAF_FTP_PASS:-}}"
+FTP_FOLDER="${FTP_FOLDER:-/products/h64/h64_cur_mon_data}"
 
-# ----------------------------------------------------------------------------------------
-# Get time
-time_now=$(date '+%Y-%m-%d')
-#time_now='2024-02-13'
-# ----------------------------------------------------------------------------------------
+# File pattern template [h64_%YYYY%MM%DD_0000_24_hea.nc.gz]
+FILE_PATTERN_TEMPLATE="${FILE_PATTERN_TEMPLATE:-h64_%YYYY%MM%DD_0000_24_hea.nc.gz}"
 
-# ----------------------------------------------------------------------------------------
-# Info script start
-echo " ==================================================================================="
-echo " ==> "$script_name" (Version: "$script_version" Release_Date: "$script_date")"
-echo " ==> START ..."
+# Connection limiting
+CONN_LIMIT="${CONN_LIMIT:-1}"
+PARALLEL="${PARALLEL:-1}"
+PGET_N="${PGET_N:-1}"
+LIMIT_RATE="${LIMIT_RATE:-0}"             # per-connection (bytes/s), 0 = unlimited
+LIMIT_TOTAL_RATE="${LIMIT_TOTAL_RATE:-0}" # total (bytes/s), 0 = unlimited
 
-# get credentials from .netrc (if not defined in the bash script)
-if [[ -z ${ftp_usr} || -z ${ftp_pwd} ]]; then
-
-	# check .netrc file availability
-	netrc_file=~/.netrc
-	if [ ! -f "${netrc_file}" ]; then
-	  echo "${netrc_file} does not exist. Please create it to store login and password on your machine"
-	  exit 0
-	fi
-
-	# get information from .netrc file
-	ftp_usr=$(awk '/'${ftp_machine}'/{getline; print $4}' ~/.netrc)
-	ftp_pwd=$(awk '/'${ftp_machine}'/{getline; print $6}' ~/.netrc)
-
+# Auto-detect .netrc
+USE_NETRC=false
+if [[ -f "${HOME}/.netrc" && -z "${FTP_USR:-}" && -z "${FTP_PWD:-}" ]]; then
+  USE_NETRC=true
 fi
-echo " ===> INFO MACHINE -- URL: ${ftp_url} -- USER: ${ftp_usr}"
 
-# Iterate over day(s)
-for day in $(seq 0 $days); do
-    
-    # ----------------------------------------------------------------------------------------
-    # Get time step
-	date_step=$(date -d "${time_now} -${day} days" +%Y%m%d)
-	# ----------------------------------------------------------------------------------------
-	
-    # ----------------------------------------------------------------------------------------
-    # Info time start
-    echo " ===> TIME_STEP: "$date_step" ===> START "
-	
-    # Define time step information
-    date_get=$(date -u -d "$date_step" +"%Y%m%d%H")
-    doy_get=$(date -u -d "$date_step" +"%j")
+# Default file permissions (adjust if you like)
+umask "${UMASK_OVERRIDE:-002}"
 
-    year_get=$(date -u -d "$date_step" +"%Y")
-    month_get=$(date -u -d "$date_step" +"%m")
-    day_get=$(date -u -d "$date_step" +"%d")
-    hour_get=$(date -u -d "$date_step" +"%H")
-    # ----------------------------------------------------------------------------------------
-	
-	# ----------------------------------------------------------------------------------------
-	# Iterate over hour(s)
-	if [ "$script_mode" == 'realtime' ]; then
-		count_start=${hour_get}
-		count_end=${hour_get}
-	elif [ "$script_mode" == 'history' ]; then 
-		count_start=23
-		count_end=0
-	fi 
-	
-	# set unique cycle to hours
-	count_start=0
-	count_end=0
-	for hour in $(seq ${count_start} -1 ${count_end}); do
-		
-		# ----------------------------------------------------------------------------------------
-		# get hour 
-		if [ "$script_mode" == 'realtime' ]; then
-			hour_get=$(printf $(date '+%H'))
-		elif [ "$script_mode" == 'history' ]; then 
-			hour_get=$(printf "%02d" ${hour})
-		fi
-		# ----------------------------------------------------------------------------------------
-		
-    	# ----------------------------------------------------------------------------------------
-    	# Info time start
-    	echo " ===> HOUR_STEP: "$hour_get" ===> START "
+# =======================================================================================
+# Helpers
+# =======================================================================================
+log() { printf "[%s] %s\n" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"; }
+die() { log "ERROR: $*"; exit 1; }
 
-		# Define ftp folder(s)
-		ftp_folder_def=${ftp_folder_raw/'%YYYY'/$year_get}
-		ftp_folder_def=${ftp_folder_def/'%MM'/$month_get}
-		ftp_folder_def=${ftp_folder_def/'%DD'/$day_get}
-		ftp_folder_def=${ftp_folder_def/'%HH'/$hour_get}
+require_bin() {
+  command -v "$1" >/dev/null 2>&1 || die "Required executable not found in PATH: $1"
+}
 
-		# Define dynamic folder(s)
-    	local_folder_def=${local_folder_raw/'%YYYY'/$year_get}
-    	local_folder_def=${local_folder_def/'%MM'/$month_get}
-    	local_folder_def=${local_folder_def/'%DD'/$day_get}    
-    	if [ "$script_mode" == 'realtime' ]; then	
-			local_folder_def=${local_folder_def/'%HH'/'realtime'}
-		elif [ "$script_mode" == 'history' ]; then 
-			local_folder_def=${local_folder_def/'%HH'/$hour_get}
-		fi
-		# ----------------------------------------------------------------------------------------
+_date() {
+  if date --version >/dev/null 2>&1; then date "$@"
+  elif command -v gdate >/dev/null 2>&1; then gdate "$@"
+  else die "GNU date required (Linux 'date' or 'gdate' on macOS)."
+  fi
+}
 
-		# ----------------------------------------------------------------------------------------	
-		# Create folder(s)
-		if [ ! -d "$local_folder_def" ]; then
-			mkdir -p $local_folder_def
-		fi
-		# ----------------------------------------------------------------------------------------
-		
-		# ----------------------------------------------------------------------------------------
-		# Get file list from ftp
-		# Example
-		# open -u "sgabellani_r","gabellaniS334" "ftphsaf.meteoam.it"
-		# cd "/products/h60/h60_cur_mon_data/"
-		# cls -1 | sort -r | grep "20230515" | sed -e "s/@//"
-		
-		ftp_file_list=`lftp << EOF
-		set ftp:proxy ${proxy}
-		open -u ${ftp_usr},${ftp_pwd} ${ftp_url}
-		cd ${ftp_folder_def}
-		cls -1 | sort -r | grep ${date_step} | sed -e "s/@//"
-		close
-		quit
-EOF`
-	   	#echo " ===> LIST FILES: $ftp_file_list "
-	   	#exit
-		# ----------------------------------------------------------------------------------------
+to_utc_ymd() { _date -u -d "$1" +%Y-%m-%d; }
 
-		# ----------------------------------------------------------------------------------------
-		# Download file(s)	
-		for ftp_file in ${ftp_file_list}; do
-		    
-		    echo -n " ====> DOWNLOAD FILE: ${ftp_file} IN ${local_folder_def} ..." 
-		    
-			if ! [ -e ${data_folder_dynamic_src_def}/${ftp_file} ]; then
-				
-				`lftp << ftprem
-					        set ftp:proxy  ${proxy}
-							open -u ${ftp_usr},${ftp_pwd} ${ftp_url}
-							cd ${ftp_folder_def}
-							get1 -o ${local_folder_def}/${ftp_file} ${ftp_file}
-							close
-							quit
-ftprem`
+mk_target_dir() {
+  local y="$1" m="$2" d="$3"
+  local path="${DATA_FOLDER_RAW//'%YYYY'/$y}"
+  path="${path//'%MM'/$m}"
+  path="${path//'%DD'/$d}"
+  path="${path//'%HH'/00}"
+  printf "%s" "$path"
+}
 
-				if [ $? -eq 0 ] > /dev/null 2>&1; then
-			 		echo " DONE!"
-				else
-					echo " FAILED [FTP ERROR]!"
-				fi
-			
-			else
-				echo " SKIPPED! File previously downloaded!"
-			fi
-		    # ----------------------------------------------------------------------------------------
-		    
-		done
-		# ----------------------------------------------------------------------------------------
-		
+mk_file_pattern() {
+  local y="$1" m="$2" d="$3"
+  local pattern="${FILE_PATTERN_TEMPLATE//'%YYYY'/$y}"
+  pattern="${pattern//'%MM'/$m}"
+  pattern="${pattern//'%DD'/$d}"
+  printf "%s" "$pattern"
+}
 
-		# ----------------------------------------------------------------------------------------
-    	# Info hour end
-    	echo " ===> HOUR_STEP: "$hour_get" ===> END "
-    	# ----------------------------------------------------------------------------------------
-    	
-	done
-	
-	# ----------------------------------------------------------------------------------------
-	# Info time end
-	echo " ===> TIME_STEP: "$date_step" ===> END "
-    # ----------------------------------------------------------------------------------------
-	
+# Run an lftp session with broadly compatible settings. Pass a single here-doc body as $1.
+lftp_run() {
+  local cmd="$1"
+  if $USE_NETRC; then
+    lftp <<EOF
+set ftp:proxy ${PROXY}
+set net:timeout 30
+set net:max-retries 5
+set net:persist-retries 1
+set cmd:fail-exit yes
+set xfer:clobber on
+set ftp:ssl-allow true
+set ftp:passive-mode true
+set net:connection-limit ${CONN_LIMIT}
+set pget:default-n ${PGET_N}
+set mirror:use-pget-n ${PGET_N}
+set net:limit-rate ${LIMIT_RATE}
+set net:limit-total-rate ${LIMIT_TOTAL_RATE}
+open ${FTP_URL}
+${cmd}
+bye
+EOF
+  else
+    [[ -n "${FTP_USR:-}" && -n "${FTP_PWD:-}" ]] || die "FTP credentials not provided and ~/.netrc not found."
+    lftp <<EOF
+set ftp:proxy ${PROXY}
+set net:timeout 30
+set net:max-retries 5
+set net:persist-retries 1
+set cmd:fail-exit yes
+set xfer:clobber on
+set ftp:ssl-allow true
+set ftp:passive-mode true
+set net:connection-limit ${CONN_LIMIT}
+set pget:default-n ${PGET_N}
+set mirror:use-pget-n ${PGET_N}
+set net:limit-rate ${LIMIT_RATE}
+set net:limit-total-rate ${LIMIT_TOTAL_RATE}
+open -u ${FTP_USR},${FTP_PWD} ${FTP_URL}
+${cmd}
+bye
+EOF
+  fi
+}
+
+# Safe move (across filesystems). Uses mv, falls back to cp+sync+rm.
+safe_move() {
+  local src="$1" dst="$2"
+  if mv -f -- "$src" "$dst" 2>/dev/null; then
+    return 0
+  fi
+  cp -f -- "$src" "$dst"
+  sync
+  rm -f -- "$src"
+}
+
+trap 'die "Unexpected failure (line $LINENO)."' ERR
+
+# =======================================================================================
+# Pre-flight
+# =======================================================================================
+require_bin lftp
+require_bin awk
+require_bin sed
+require_bin sort
+require_bin mktemp
+
+# =======================================================================================
+# Startup summary
+# =======================================================================================
+echo " ==================================================================================="
+echo " 🧊 ${script_name} - Runtime Summary"
+echo " -----------------------------------------------------------------------------------"
+printf " Version:             %s\n" "${script_version}"
+printf " Release Date:        %s\n" "${script_date}"
+printf " Output Template:     %s\n" "${DATA_FOLDER_RAW}"
+printf " Days Back:           %s\n" "${DAYS}"
+printf " Anchor Date (UTC):   %s\n" "${START_DATE_UTC}"
+printf " FTP Host:            %s\n" "${FTP_URL}"
+printf " FTP Folder:          %s\n" "${FTP_FOLDER}"
+printf " File Pattern:        %s\n" "${FILE_PATTERN_TEMPLATE}"
+printf " Use .netrc:          %s\n" "${USE_NETRC}"
+printf " Proxy:               %s\n" "${PROXY:-<none>}"
+printf " Connection Limit:    %s\n" "${CONN_LIMIT}"
+printf " Parallel Downloads:  %s\n" "${PARALLEL}"
+printf " Segments per File:   %s\n" "${PGET_N}"
+printf " Limit Rate (per):    %s\n" "${LIMIT_RATE}"
+printf " Limit Rate (total):  %s\n" "${LIMIT_TOTAL_RATE}"
+printf " Staging Dir:         %s\n" "${STAGING_DIR:-<none>}"
+echo " ==================================================================================="
+
+# =======================================================================================
+# Main
+# =======================================================================================
+log "==> START"
+anchor_ymd="$(to_utc_ymd "${START_DATE_UTC}")"
+log "Anchor UTC date: ${anchor_ymd} ; Days back: ${DAYS}"
+
+for ((i=0; i<=DAYS; i++)); do
+  ymd="$(_date -u -d "${anchor_ymd} - ${i} days" +%Y-%m-%d)"
+  y="$(_date -u -d "${ymd}" +%Y)"
+  m="$(_date -u -d "${ymd}" +%m)"
+  d="$(_date -u -d "${ymd}" +%d)"
+  pattern="$(mk_file_pattern "$y" "$m" "$d")"
+
+  # Direct target directory
+  target_dir="$(mk_target_dir "$y" "$m" "$d")"
+  target_file="${target_dir}/${pattern}"
+
+  # Staging directory (optional)
+  if [[ -n "${STAGING_DIR}" ]]; then
+    stage_dir="${STAGING_DIR%/}/${y}/${m}/${d}"
+  else
+    stage_dir="${target_dir}"
+  fi
+  stage_file="${stage_dir}/${pattern}"
+
+  mkdir -p -- "$stage_dir" "$target_dir"
+
+  log "====> TIME_STEP: ${y}-${m}-${d} ===> START (target: ${target_dir})"
+  log "Pattern: ${pattern}"
+
+  # --- skip if already present in final destination ---
+  if [[ -f "${target_file}" && -s "${target_file}" ]]; then
+    echo "----- SKIPPED ${y}-${m}-${d} -----"
+    echo "File already exists locally:"
+    echo "  ${target_file}"
+    log "Skipping FTP connection for ${pattern}"
+    continue
+  fi
+
+  # --- check remote existence first (older lftp exits hard on 550) ---
+  if ! lftp_run "cd ${FTP_FOLDER}; cls -1 ${pattern}" | grep -qx "${pattern}"; then
+    echo "No remote file found for ${y}-${m}-${d} (pattern: ${pattern}). Skipping."
+    log "Remote missing or not yet published."
+    continue
+  fi
+
+  session_log="$(mktemp)"
+
+  # --- download exact file with pget, forcing local CWD ---
+  if ! lftp_run "
+    lcd ${stage_dir}
+    cd ${FTP_FOLDER}
+    pget -n ${PGET_N} -c ${pattern}
+  " | tee "${session_log}"; then
+    echo "lftp pget failed for ${pattern}"
+    tail -n 50 "${session_log}" || true
+    rm -f "${session_log}"
+    die "lftp pget failed for ${pattern}"
+  fi
+
+  # --- verify staging file exists and is non-empty ---
+  if [[ ! -s "${stage_file}" ]]; then
+    echo "No file present locally after transfer for ${y}-${m}-${d} (pattern: ${pattern})."
+    echo "Last lftp session log snippet:"
+    tail -n 50 "${session_log}" || true
+    rm -f "${session_log}"
+    die "Transfer reported but file not found: ${stage_file}"
+  fi
+
+  # --- move from staging to final (if needed) ---
+  if [[ "${stage_dir}" != "${target_dir}" ]]; then
+    safe_move "${stage_file}" "${target_file}"
+  fi
+
+  # --- final verification ---
+  if [[ -s "${target_file}" ]]; then
+    echo "----- Downloaded files for ${y}-${m}-${d} -----"
+    echo "Source: ${FTP_URL}${FTP_FOLDER}"
+    echo "Destination: ${target_dir}"
+    echo "Pattern: ${pattern}"
+    echo "-----------------------------------------------"
+    echo "  • ${FTP_FOLDER}/${pattern}"
+  else
+    echo "File missing after move for ${y}-${m}-${d}: ${target_file}"
+    tail -n 50 "${session_log}" || true
+    rm -f "${session_log}"
+    die "File verification failed: ${target_file}"
+  fi
+
+  rm -f "${session_log}"
+  log "====> TIME_STEP: ${y}-${m}-${d} ===> END"
 done
 
-# Info script end
-echo " ==> "$script_name" (Version: "$script_version" Release_Date: "$script_date")"
-echo " ==> ... END"
-echo " ==> Bye, Bye"
-echo " ==================================================================================="
-# ----------------------------------------------------------------------------------------
+log "==> ${script_name} (Version: ${script_version} Release_Date: ${script_date})"
+log "==> ... END"
+log "==> Bye, Bye"
+# =======================================================================================
 

@@ -4,37 +4,44 @@ IFS=$'\n\t'
 
 # =======================================================================================
 # Script information
-script_name='HEAD DOWNLOADER - HSAF PRODUCT SNOW H10 - REALTIME'
-script_version="2.4.1"
+script_name='HEAD DOWNLOADER - HSAF PRODUCT SOIL MOISTURE H26 - REALTIME'
+script_version="1.0.0"
 script_date='2025/11/11'
 # =======================================================================================
 
 # -------------------------------------
 # Defaults (override via environment)
 # -------------------------------------
-DATA_FOLDER_RAW="${DATA_FOLDER_RAW:-/share/HSAF_SNOW/nrt/h10/%YYYY/%MM/%DD/}"
-DAYS="${DAYS:-10}"
-START_DATE_UTC="${START_DATE_UTC:-today}"
+DATA_FOLDER_RAW="${DATA_FOLDER_RAW:-/share/HSAF_SM/ecmwf/nrt/h26/%YYYY/%MM/%DD/}"
+DAYS="${DAYS:-12}"                          # how many days back from START_DATE_UTC to include
+START_DATE_UTC="${START_DATE_UTC:-today}"   # anchor day in UTC (e.g., "2025-11-11", "yesterday", "2025-11-01 00:00")
 
 # If set, download to staging first, then move into DATA_FOLDER_RAW
-STAGING_DIR="${STAGING_DIR:-}"   # e.g., /tmp/hsaf_staging
+STAGING_DIR="${STAGING_DIR:-}"              # e.g., /tmp/hsaf_staging
 
 PROXY="${PROXY:-}"
 
 FTP_URL="${FTP_URL:-ftphsaf.meteoam.it}"
 FTP_USR="${FTP_USR:-${HSAF_FTP_USER:-}}"
 FTP_PWD="${FTP_PWD:-${HSAF_FTP_PASS:-}}"
-FTP_FOLDER="${FTP_FOLDER:-/products/h10/h10_cur_mon_data}"
+FTP_FOLDER="${FTP_FOLDER:-/products/h26/h26_cur_mon_nc}"
 
-# File pattern template
-FILE_PATTERN_TEMPLATE="${FILE_PATTERN_TEMPLATE:-h10_%YYYY%MM%DD_day_merged.H5.gz}"
+# File pattern template (remote file name)
+FILE_PATTERN_TEMPLATE="${FILE_PATTERN_TEMPLATE:-h26_%YYYY%MM%DD00_R01.nc}"
 
 # Connection limiting
 CONN_LIMIT="${CONN_LIMIT:-1}"
-PARALLEL="${PARALLEL:-1}"
-PGET_N="${PGET_N:-1}"
-LIMIT_RATE="${LIMIT_RATE:-0}"             # per-connection (bytes/s), 0 = unlimited
-LIMIT_TOTAL_RATE="${LIMIT_TOTAL_RATE:-0}" # total (bytes/s), 0 = unlimited
+PGET_N="${PGET_N:-1}"                        # segments per file (resumable)
+LIMIT_RATE="${LIMIT_RATE:-0}"                # per-connection (bytes/s), 0 = unlimited
+LIMIT_TOTAL_RATE="${LIMIT_TOTAL_RATE:-0}"    # total (bytes/s), 0 = unlimited
+
+# Behavior
+DRY_RUN="${DRY_RUN:-false}"                  # don't actually download/move
+RESET_EXISTING="${RESET_EXISTING:-false}"    # remove target file and re-download if present
+VERBOSE="${VERBOSE:-true}"
+
+# Locking
+LOCKFILE="${LOCKFILE:-/tmp/hsaf_h26_downloader.lock}"
 
 # Auto-detect .netrc
 USE_NETRC=false
@@ -42,13 +49,16 @@ if [[ -f "${HOME}/.netrc" && -z "${FTP_USR:-}" && -z "${FTP_PWD:-}" ]]; then
   USE_NETRC=true
 fi
 
-# Default file permissions (adjust if you like)
+# Default file permissions
 umask "${UMASK_OVERRIDE:-002}"
 
 # =======================================================================================
 # Helpers
 # =======================================================================================
-log() { printf "[%s] %s\n" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"; }
+log() {
+  local ts; ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  if [[ "${VERBOSE}" == "true" ]]; then printf "[%s] %s\n" "${ts}" "$*"; fi
+}
 die() { log "ERROR: $*"; exit 1; }
 
 require_bin() {
@@ -66,46 +76,31 @@ to_utc_ymd() { _date -u -d "$1" +%Y-%m-%d; }
 
 mk_target_dir() {
   local y="$1" m="$2" d="$3"
-  local path="${DATA_FOLDER_RAW//'%YYYY'/$y}"
-  path="${path//'%MM'/$m}"
-  path="${path//'%DD'/$d}"
-  path="${path//'%HH'/00}"
+  local path="${DATA_FOLDER_RAW//'%'YYYY/$y}"
+  path="${path//'%'MM/$m}"
+  path="${path//'%'DD/$d}"
+  path="${path//'%'HH/00}"
   printf "%s" "$path"
 }
 
 mk_file_pattern() {
   local y="$1" m="$2" d="$3"
-  local pattern="${FILE_PATTERN_TEMPLATE//'%YYYY'/$y}"
-  pattern="${pattern//'%MM'/$m}"
-  pattern="${pattern//'%DD'/$d}"
+  local pattern="${FILE_PATTERN_TEMPLATE//'%'YYYY/$y}"
+  pattern="${pattern//'%'MM/$m}"
+  pattern="${pattern//'%'DD/$d}"
   printf "%s" "$pattern"
 }
 
 # Run an lftp session with broadly compatible settings. Pass a single here-doc body as $1.
 lftp_run() {
   local cmd="$1"
-  if $USE_NETRC; then
-    lftp <<EOF
-set ftp:proxy ${PROXY}
-set net:timeout 30
-set net:max-retries 5
-set net:persist-retries 1
-set cmd:fail-exit yes
-set xfer:clobber on
-set ftp:ssl-allow true
-set ftp:passive-mode true
-set net:connection-limit ${CONN_LIMIT}
-set pget:default-n ${PGET_N}
-set mirror:use-pget-n ${PGET_N}
-set net:limit-rate ${LIMIT_RATE}
-set net:limit-total-rate ${LIMIT_TOTAL_RATE}
-open ${FTP_URL}
-${cmd}
-bye
-EOF
-  else
+  local auth="open ${FTP_URL}"
+  if ! $USE_NETRC; then
     [[ -n "${FTP_USR:-}" && -n "${FTP_PWD:-}" ]] || die "FTP credentials not provided and ~/.netrc not found."
-    lftp <<EOF
+    auth="open -u ${FTP_USR},${FTP_PWD} ${FTP_URL}"
+  fi
+
+  lftp <<EOF
 set ftp:proxy ${PROXY}
 set net:timeout 30
 set net:max-retries 5
@@ -119,16 +114,19 @@ set pget:default-n ${PGET_N}
 set mirror:use-pget-n ${PGET_N}
 set net:limit-rate ${LIMIT_RATE}
 set net:limit-total-rate ${LIMIT_TOTAL_RATE}
-open -u ${FTP_USR},${FTP_PWD} ${FTP_URL}
+${auth}
 ${cmd}
 bye
 EOF
-  fi
 }
 
 # Safe move (across filesystems). Uses mv, falls back to cp+sync+rm.
 safe_move() {
   local src="$1" dst="$2"
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    log "DRY-RUN: would move '${src}' -> '${dst}'"
+    return 0
+  fi
   if mv -f -- "$src" "$dst" 2>/dev/null; then
     return 0
   fi
@@ -137,22 +135,59 @@ safe_move() {
   rm -f -- "$src"
 }
 
+usage() {
+cat <<USAGE
+${script_name} ${script_version}  (${script_date})
+
+Downloads HSAF H26 daily NetCDF files from ${FTP_URL}${FTP_FOLDER} into a YYYY/MM/DD tree.
+
+Environment variables:
+  DATA_FOLDER_RAW       Target dir template [${DATA_FOLDER_RAW}]
+  STAGING_DIR           Optional staging dir (uses target if empty)
+  DAYS                  Days back from START_DATE_UTC (inclusive) [${DAYS}]
+  START_DATE_UTC        Anchor date in UTC (e.g. 'today', '2025-11-01') [${START_DATE_UTC}]
+  FTP_URL               Host [${FTP_URL}]
+  FTP_FOLDER            Remote folder [${FTP_FOLDER}]
+  FILE_PATTERN_TEMPLATE Remote filename template [${FILE_PATTERN_TEMPLATE}]
+  HSAF_FTP_USER/FTP_USR, HSAF_FTP_PASS/FTP_PWD
+  PROXY                 e.g. http://host:port  [${PROXY:-<none>}]
+  CONN_LIMIT            Parallel connections to server [${CONN_LIMIT}]
+  PGET_N                Segments per file (resumable) [${PGET_N}]
+  LIMIT_RATE            Per-connection rate (bytes/s) [${LIMIT_RATE}]
+  LIMIT_TOTAL_RATE      Total rate (bytes/s) [${LIMIT_TOTAL_RATE}]
+  DRY_RUN               true/false [${DRY_RUN}]
+  RESET_EXISTING        true/false [${RESET_EXISTING}]
+  VERBOSE               true/false [${VERBOSE}]
+  LOCKFILE              [${LOCKFILE}]
+
+Examples:
+  START_DATE_UTC=today DAYS=12 ./hsaf_h26_downloader.sh
+  HSAF_FTP_USER=xxx HSAF_FTP_PASS=yyy START_DATE_UTC=2025-11-10 DAYS=3 ./hsaf_h26_downloader.sh
+  DRY_RUN=true DAYS=1 ./hsaf_h26_downloader.sh
+  START_DATE_UTC=2025-11-09 DAYS=0 RESET_EXISTING=true ./hsaf_h26_downloader.sh
+USAGE
+}
+
+# Trap & lock
 trap 'die "Unexpected failure (line $LINENO)."' ERR
 
 # =======================================================================================
 # Pre-flight
 # =======================================================================================
-require_bin lftp
-require_bin awk
-require_bin sed
-require_bin sort
-require_bin mktemp
+for b in lftp awk sed sort mktemp; do require_bin "$b"; done
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+
+# Lock to avoid concurrent runs
+exec 9> "${LOCKFILE}"
+if ! flock -n 9; then
+  die "Another instance is running (lock: ${LOCKFILE})"
+fi
 
 # =======================================================================================
 # Startup summary
 # =======================================================================================
 echo " ==================================================================================="
-echo " 🧊 ${script_name} - Runtime Summary"
+echo " 🌱 ${script_name} - Runtime Summary"
 echo " -----------------------------------------------------------------------------------"
 printf " Version:             %s\n" "${script_version}"
 printf " Release Date:        %s\n" "${script_date}"
@@ -164,12 +199,13 @@ printf " FTP Folder:          %s\n" "${FTP_FOLDER}"
 printf " File Pattern:        %s\n" "${FILE_PATTERN_TEMPLATE}"
 printf " Use .netrc:          %s\n" "${USE_NETRC}"
 printf " Proxy:               %s\n" "${PROXY:-<none>}"
-printf " Connection Limit:    %s\n" "${CONN_LIMIT}"
-printf " Parallel Downloads:  %s\n" "${PARALLEL}"
+printf " Conn Limit:          %s\n" "${CONN_LIMIT}"
 printf " Segments per File:   %s\n" "${PGET_N}"
 printf " Limit Rate (per):    %s\n" "${LIMIT_RATE}"
 printf " Limit Rate (total):  %s\n" "${LIMIT_TOTAL_RATE}"
 printf " Staging Dir:         %s\n" "${STAGING_DIR:-<none>}"
+printf " Dry Run:             %s\n" "${DRY_RUN}"
+printf " Reset Existing:      %s\n" "${RESET_EXISTING}"
 echo " ==================================================================================="
 
 # =======================================================================================
@@ -198,7 +234,12 @@ for ((i=0; i<=DAYS; i++)); do
   fi
   stage_file="${stage_dir}/${pattern}"
 
-  mkdir -p -- "$stage_dir" "$target_dir"
+  if [[ "${RESET_EXISTING}" == "true" && -f "${target_file}" ]]; then
+    log "RESET: removing existing ${target_file}"
+    [[ "${DRY_RUN}" == "true" ]] || rm -f -- "${target_file}"
+  fi
+
+  mkdir -p -- "${stage_dir}" "${target_dir}"
 
   log "====> TIME_STEP: ${y}-${m}-${d} ===> START (target: ${target_dir})"
   log "Pattern: ${pattern}"
@@ -216,6 +257,11 @@ for ((i=0; i<=DAYS; i++)); do
   if ! lftp_run "cd ${FTP_FOLDER}; cls -1 ${pattern}" | grep -qx "${pattern}"; then
     echo "No remote file found for ${y}-${m}-${d} (pattern: ${pattern}). Skipping."
     log "Remote missing or not yet published."
+    continue
+  fi
+
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    log "DRY-RUN: would download ${FTP_FOLDER}/${pattern} -> ${stage_file}"
     continue
   fi
 
@@ -264,6 +310,7 @@ for ((i=0; i<=DAYS; i++)); do
 
   rm -f "${session_log}"
   log "====> TIME_STEP: ${y}-${m}-${d} ===> END"
+
 done
 
 log "==> ${script_name} (Version: ${script_version} Release_Date: ${script_date})"

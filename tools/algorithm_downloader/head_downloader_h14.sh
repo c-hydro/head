@@ -1,437 +1,357 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
 
-# ----------------------------------------------------------------------------------------
+# =======================================================================================
 # Script information
-script_name='HEAD DOWNLOADER - HSAF PRODUCT SOIL MOISTURE RZSM - H14'
-script_version="2.0.2"
-script_date='2024/01/30'
+script_name='HEAD DOWNLOADER - HSAF PRODUCT SOIL MOISTURE H14 - REALTIME'
+script_version="1.0.0"
+script_date='2025/11/11'
+# =======================================================================================
 
-# Script argument(s)
-days=10
-proxy=""
+# -------------------------------------
+# Defaults (override via environment)
+# -------------------------------------
+DATA_FOLDER_RAW="${DATA_FOLDER_RAW:-/share/HSAF_SM/ecmwf/nrt/h14/%YYYY/%MM/%DD/}"
+DAYS="${DAYS:-10}"                          # how many days back from START_DATE_UTC to include
+START_DATE_UTC="${START_DATE_UTC:-today}"   # anchor day in UTC (e.g., "2025-11-11", "yesterday", "2025-11-01 00:00")
 
-ftp_url="ftphsaf.meteoam.it"
-ftp_usr="" 
-ftp_pwd=""
-ftp_folder_raw="/products/h14/h14_cur_mon_grib/" 	# current
-#ftp_folder_raw="/hsaf_archive/h14/%YYYY/%MM/%DD/"	# archive
+# Variant selector: data|aux  -> sets remote folder + filename pattern
+H14_VARIANT="${H14_VARIANT:-data}"          # 'data' => h14_* ; 'aux' => t14_*
 
-# Define folder(s)
-folder_in_raw="/share/HSAF_SM/ecmwf/nrt/h14/%YYYY/%MM/%DD/"
-folder_tmp_raw="/share/HSAF_SM/ecmwf/ancillary/h14/%YYYY/%MM/%DD/"
-folder_out_raw="/share/SM_OBS_MOD/grid_ecmwf/%YYYY/%MM/%DD/"
-folder_grid="/share/HSAF_SM/ecmwf/auxiliary/h14/"
+# If set, download to staging first, then move into DATA_FOLDER_RAW
+STAGING_DIR="${STAGING_DIR:-}"              # e.g., /tmp/hsaf_staging
 
-# Define filename(s)
-file_in_bz2_raw="h14_%YYYY%MM%DD_%HH00.grib.bz2"
-file_in_grib_raw="h14_%YYYY%MM%DD_%HH00.grib"
-file_tmp_grib_raw="rzsm_%YYYY%MM%DD_%HH00.grib"
-file_out_grib_raw="rzsm_%YYYY%MM%DD%HH00_global.grib"
+PROXY="${PROXY:-}"
 
-file_in_nc_raw="rzsm_%YYYY%MM%DD%HH00_global.nc"
-file_out_nc_raw="rzsm_%YYYY%MM%DD%HH00_europe.nc"
+FTP_URL="${FTP_URL:-ftphsaf.meteoam.it}"
+FTP_USR="${FTP_USR:-${HSAF_FTP_USER:-}}"
+FTP_PWD="${FTP_PWD:-${HSAF_FTP_PASS:-}}"
 
-file_grid='rzsm_grid_europe.nc'
+# Defaults for 'data' variant
+FTP_FOLDER_DATA="/products/h14/h14_cur_mon_grib"
+FILE_PATTERN_TEMPLATE_DATA="h14_%YYYY%MM%DD_0000.grib.bz2"
 
-# Define domain bounding box
-domain_bb='-15,30,30,60'
-# ----------------------------------------------------------------------------------------
+# Defaults for 'aux' variant
+FTP_FOLDER_AUX="/products/h14_auxiliary/"
+FILE_PATTERN_TEMPLATE_AUX="t14_%YYYY%MM%DD_0000.grib.bz2"
 
-# ----------------------------------------------------------------------------------------
-# Define executable(s)
-exec_cdo="/home/idrologia/apps/cdo/bin/cdo" # server
-exec_ncap2="/home/idrologia/apps/nco/bin/ncap2"
-exec_ncks="/home/idrologia/apps/nco/bin/ncks"
-# ----------------------------------------------------------------------------------------
+# Will be set after variant resolution
+FTP_FOLDER=""
+FILE_PATTERN_TEMPLATE=""
 
-# ----------------------------------------------------------------------------------------
-# Export library path dependecies
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/hsaf/library/grib_api-1.15.0/lib/
-# ----------------------------------------------------------------------------------------
+# Connection limiting
+CONN_LIMIT="${CONN_LIMIT:-1}"
+PGET_N="${PGET_N:-1}"                        # segments per file (resumable)
+LIMIT_RATE="${LIMIT_RATE:-0}"                # per-connection (bytes/s), 0 = unlimited
+LIMIT_TOTAL_RATE="${LIMIT_TOTAL_RATE:-0}"    # total (bytes/s), 0 = unlimited
 
-# ----------------------------------------------------------------------------------------
-# Get time
-time_now=$(date '+%Y-%m-%d 00:00')
-# time_now='2018-05-22 00:00' # DEBUG
-# ----------------------------------------------------------------------------------------
+# Behavior
+DRY_RUN="${DRY_RUN:-false}"                  # don't actually download/move
+RESET_EXISTING="${RESET_EXISTING:-false}"    # remove target file and re-download if present
+VERBOSE="${VERBOSE:-true}"
 
-# ----------------------------------------------------------------------------------------
-# Info script start
+# Locking
+LOCKFILE="${LOCKFILE:-/tmp/hsaf_h14_downloader.lock}"
+
+# Auto-detect .netrc
+USE_NETRC=false
+if [[ -f "${HOME}/.netrc" && -z "${FTP_USR:-}" && -z "${FTP_PWD:-}" ]]; then
+  USE_NETRC=true
+fi
+
+# Default file permissions
+umask "${UMASK_OVERRIDE:-002}"
+
+# =======================================================================================
+# Helpers
+# =======================================================================================
+log() {
+  local ts; ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  if [[ "${VERBOSE}" == "true" ]]; then printf "[%s] %s\n" "${ts}" "$*"; fi
+}
+die() { log "ERROR: $*"; exit 1; }
+
+require_bin() {
+  command -v "$1" >/dev/null 2>&1 || die "Required executable not found in PATH: $1"
+}
+
+_date() {
+  if date --version >/dev/null 2>&1; then date "$@"
+  elif command -v gdate >/dev/null 2>&1; then gdate "$@"
+  else die "GNU date required (Linux 'date' or 'gdate' on macOS)."
+  fi
+}
+
+to_utc_ymd() { _date -u -d "$1" +%Y-%m-%d; }
+
+mk_target_dir() {
+  local y="$1" m="$2" d="$3"
+  local path="${DATA_FOLDER_RAW//'%'YYYY/$y}"
+  path="${path//'%'MM/$m}"
+  path="${path//'%'DD/$d}"
+  path="${path//'%'HH/00}"
+  printf "%s" "$path"
+}
+
+mk_file_pattern() {
+  local y="$1" m="$2" d="$3"
+  local pattern="${FILE_PATTERN_TEMPLATE//'%'YYYY/$y}"
+  pattern="${pattern//'%'MM/$m}"
+  pattern="${pattern//'%'DD/$d}"
+  printf "%s" "$pattern"
+}
+
+resolve_variant() {
+  case "${H14_VARIANT}" in
+    data|DATA)
+      FTP_FOLDER="${FTP_FOLDER_DATA}"
+      FILE_PATTERN_TEMPLATE="${FILE_PATTERN_TEMPLATE_DATA}"
+      ;;
+    aux|AUX|auxiliary|AUXILIARY)
+      FTP_FOLDER="${FTP_FOLDER_AUX}"
+      FILE_PATTERN_TEMPLATE="${FILE_PATTERN_TEMPLATE_AUX}"
+      ;;
+    *)
+      die "Unknown H14_VARIANT='${H14_VARIANT}'. Use 'data' or 'aux'."
+      ;;
+  esac
+}
+
+# Run an lftp session with broadly compatible settings. Pass a single here-doc body as $1.
+lftp_run() {
+  local cmd="$1"
+  local auth="open ${FTP_URL}"
+  if ! $USE_NETRC; then
+    [[ -n "${FTP_USR:-}" && -n "${FTP_PWD:-}" ]] || die "FTP credentials not provided and ~/.netrc not found."
+    auth="open -u ${FTP_USR},${FTP_PWD} ${FTP_URL}"
+  fi
+
+  lftp <<EOF
+set ftp:proxy ${PROXY}
+set net:timeout 30
+set net:max-retries 5
+set net:persist-retries 1
+set cmd:fail-exit yes
+set xfer:clobber on
+set ftp:ssl-allow true
+set ftp:passive-mode true
+set net:connection-limit ${CONN_LIMIT}
+set pget:default-n ${PGET_N}
+set mirror:use-pget-n ${PGET_N}
+set net:limit-rate ${LIMIT_RATE}
+set net:limit-total-rate ${LIMIT_TOTAL_RATE}
+${auth}
+${cmd}
+bye
+EOF
+}
+
+# Safe move (across filesystems). Uses mv, falls back to cp+sync+rm.
+safe_move() {
+  local src="$1" dst="$2"
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    log "DRY-RUN: would move '${src}' -> '${dst}'"
+    return 0
+  fi
+  if mv -f -- "$src" "$dst" 2>/dev/null; then
+    return 0
+  fi
+  cp -f -- "$src" "$dst"
+  sync
+  rm -f -- "$src"
+}
+
+usage() {
+cat <<USAGE
+${script_name} ${script_version}  (${script_date})
+
+Downloads HSAF H14 daily GRIB files (data or auxiliary) from ${FTP_URL} into a YYYY/MM/DD tree.
+
+Select variant with H14_VARIANT=data|aux
+  data: folder '${FTP_FOLDER_DATA}', pattern '${FILE_PATTERN_TEMPLATE_DATA}'
+  aux : folder '${FTP_FOLDER_AUX}',  pattern '${FILE_PATTERN_TEMPLATE_AUX}'
+
+Environment variables:
+  DATA_FOLDER_RAW       Target dir template [\${DATA_FOLDER_RAW}]
+  STAGING_DIR           Optional staging dir (uses target if empty)
+  DAYS                  Days back from START_DATE_UTC (inclusive) [\${DAYS}]
+  START_DATE_UTC        Anchor date in UTC (e.g. 'today', '2025-11-01') [\${START_DATE_UTC}]
+  FTP_URL               Host [\${FTP_URL}]
+  HSAF_FTP_USER/FTP_USR, HSAF_FTP_PASS/FTP_PWD
+  H14_VARIANT           data|aux [\${H14_VARIANT}]
+  PROXY                 e.g. http://host:port  [\${PROXY:-<none>}]
+  CONN_LIMIT            Parallel connections to server [\${CONN_LIMIT}]
+  PGET_N                Segments per file (resumable) [\${PGET_N}]
+  LIMIT_RATE            Per-connection rate (bytes/s) [\${LIMIT_RATE}]
+  LIMIT_TOTAL_RATE      Total rate (bytes/s) [\${LIMIT_TOTAL_RATE}]
+  DRY_RUN               true/false [\${DRY_RUN}]
+  RESET_EXISTING        true/false [\${RESET_EXISTING}]
+  VERBOSE              true/false [\${VERBOSE}]
+  LOCKFILE              [\${LOCKFILE}]
+
+Examples:
+  # main data
+  START_DATE_UTC=today DAYS=10 H14_VARIANT=data ./hsaf_h14_downloader.sh
+
+  # auxiliary files
+  H14_VARIANT=aux START_DATE_UTC=2025-11-10 DAYS=3 ./hsaf_h14_downloader.sh
+
+  # dry-run / reset
+  DRY_RUN=true DAYS=1 ./hsaf_h14_downloader.sh
+  START_DATE_UTC=2025-11-09 DAYS=0 RESET_EXISTING=true H14_VARIANT=data ./hsaf_h14_downloader.sh
+USAGE
+}
+
+# Trap & lock
+trap 'die "Unexpected failure (line $LINENO)."' ERR
+
+# =======================================================================================
+# Pre-flight
+# =======================================================================================
+for b in lftp awk sed sort mktemp; do require_bin "$b"; done
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+
+# Resolve variant -> sets FTP_FOLDER & FILE_PATTERN_TEMPLATE
+resolve_variant
+
+# Lock to avoid concurrent runs
+exec 9> "${LOCKFILE}"
+if ! flock -n 9; then
+  die "Another instance is running (lock: ${LOCKFILE})"
+fi
+
+# =======================================================================================
+# Startup summary
+# =======================================================================================
 echo " ==================================================================================="
-echo " ==> "$script_name" (Version: "$script_version" Release_Date: "$script_date")"
-echo " ==> START ..."
-# ----------------------------------------------------------------------------------------
+echo " 🌾 ${script_name} - Runtime Summary"
+echo " -----------------------------------------------------------------------------------"
+printf " Version:             %s\n" "${script_version}"
+printf " Release Date:        %s\n" "${script_date}"
+printf " Output Template:     %s\n" "${DATA_FOLDER_RAW}"
+printf " Days Back:           %s\n" "${DAYS}"
+printf " Anchor Date (UTC):   %s\n" "${START_DATE_UTC}"
+printf " FTP Host:            %s\n" "${FTP_URL}"
+printf " FTP Folder:          %s\n" "${FTP_FOLDER}"
+printf " File Pattern:        %s\n" "${FILE_PATTERN_TEMPLATE}"
+printf " Use .netrc:          %s\n" "${USE_NETRC}"
+printf " Proxy:               %s\n" "${PROXY:-<none>}"
+printf " Conn Limit:          %s\n" "${CONN_LIMIT}"
+printf " Segments per File:   %s\n" "${PGET_N}"
+printf " Limit Rate (per):    %s\n" "${LIMIT_RATE}"
+printf " Limit Rate (total):  %s\n" "${LIMIT_TOTAL_RATE}"
+printf " Staging Dir:         %s\n" "${STAGING_DIR:-<none>}"
+printf " Dry Run:             %s\n" "${DRY_RUN}"
+printf " Reset Existing:      %s\n" "${RESET_EXISTING}"
+echo " ==================================================================================="
 
-# Iterate over days
-for day in $(seq 0 $days); do
-    
-	# ----------------------------------------------------------------------------------------
-    # Get time step
-	time_step=$(date -d "$time_now ${day} days ago" +'%Y%m%d%H%M')
+# =======================================================================================
+# Main
+# =======================================================================================
+log "==> START"
+anchor_ymd="$(to_utc_ymd "${START_DATE_UTC}")"
+log "Anchor UTC date: ${anchor_ymd} ; Days back: ${DAYS}"
 
-    year_step=${time_step:0:4}
-    month_step=${time_step:4:2}
-    day_step=${time_step:6:2}
-    hour_step=${time_step:8:2}
-    minute_step=${time_step:10:2}
+for ((i=0; i<=DAYS; i++)); do
+  ymd="$(_date -u -d "${anchor_ymd} - ${i} days" +%Y-%m-%d)"
+  y="$(_date -u -d "${ymd}" +%Y)"
+  m="$(_date -u -d "${ymd}" +%m)"
+  d="$(_date -u -d "${ymd}" +%d)"
+  pattern="$(mk_file_pattern "$y" "$m" "$d")"
 
-	ftp_time_step=${year_step}${month_step}${day_step}_${hour_step}${minute_step}
+  # Direct target directory
+  target_dir="$(mk_target_dir "$y" "$m" "$d")"
+  target_file="${target_dir}/${pattern}"
 
-    # Info time start
-    echo " ===> TIME_STEP: "$time_step" ===> START "
-	# ----------------------------------------------------------------------------------------
+  # Staging directory (optional)
+  if [[ -n "${STAGING_DIR}" ]]; then
+    stage_dir="${STAGING_DIR%/}/${y}/${m}/${d}"
+  else
+    stage_dir="${target_dir}"
+  fi
+  stage_file="${stage_dir}/${pattern}"
 
-	# ----------------------------------------------------------------------------------------
-	# Define dynamic folder(s)
-    ftp_folder_step=${ftp_folder_raw/'%YYYY'/$year_step}
-    ftp_folder_step=${ftp_folder_step/'%MM'/$month_step}
-    ftp_folder_step=${ftp_folder_step/'%DD'/$day_step}
-    ftp_folder_step=${ftp_folder_step/'%HH'/$hour_step}
-	ftp_folder_step=${ftp_folder_step/'%MM'/$minute_step}
+  if [[ "${RESET_EXISTING}" == "true" && -f "${target_file}" ]]; then
+    log "RESET: removing existing ${target_file}"
+    [[ "${DRY_RUN}" == "true" ]] || rm -f -- "${target_file}"
+  fi
 
-	folder_in_step=${folder_in_raw/'%YYYY'/$year_step}
-    folder_in_step=${folder_in_step/'%MM'/$month_step}
-    folder_in_step=${folder_in_step/'%DD'/$day_step}
-    folder_in_step=${folder_in_step/'%HH'/$hour_step}
-	folder_in_step=${folder_in_step/'%MM'/$minute_step}
+  mkdir -p -- "${stage_dir}" "${target_dir}"
 
-	file_in_bz2_step=${file_in_bz2_raw/'%YYYY'/$year_step}
-	file_in_bz2_step=${file_in_bz2_step/'%MM'/$month_step}
-	file_in_bz2_step=${file_in_bz2_step/'%DD'/$day_step}
-	file_in_bz2_step=${file_in_bz2_step/'%HH'/$hour_step}
-	file_in_bz2_step=${file_in_bz2_step/'%MM'/$minute_step}
+  log "====> TIME_STEP: ${y}-${m}-${d} ===> START (target: ${target_dir})"
+  log "Pattern: ${pattern}"
 
-	# Path(s) definition
-	path_in_bz2_step=${folder_in_step}${file_in_bz2_step}
-	path_grid=${folder_grid}${file_grid}
-	# ----------------------------------------------------------------------------------------
+  # --- skip if already present in final destination ---
+  if [[ -f "${target_file}" && -s "${target_file}" ]]; then
+    echo "----- SKIPPED ${y}-${m}-${d} -----"
+    echo "File already exists locally:"
+    echo "  ${target_file}"
+    log "Skipping FTP connection for ${pattern}"
+    continue
+  fi
 
-	# ----------------------------------------------------------------------------------------	
-	# Create folder(s)
-	if [ ! -d "$folder_in_step" ]; then
-		mkdir -p $folder_in_step
-	fi
-	if [ ! -d "$folder_grid" ]; then
-		mkdir -p $folder_grid
-	fi
-	# ----------------------------------------------------------------------------------------
-	
-	# ----------------------------------------------------------------------------------------
-	# Condition to control file availability 
-	if ! [ -e ${path_in_bz2_step} ]; then
+  # --- check remote existence first (older lftp exits hard on 550) ---
+  if ! lftp_run "cd ${FTP_FOLDER}; cls -1 ${pattern}" | grep -qx "${pattern}"; then
+    echo "No remote file found for ${y}-${m}-${d} (pattern: ${pattern}). Skipping."
+    log "Remote missing or not yet published."
+    continue
+  fi
 
-		# ----------------------------------------------------------------------------------------
-		# Get file list from ftp
-		ftp_file_list=`lftp << ftprem
-						set ftp:proxy ${proxy}
-						open -u ${ftp_usr},${ftp_pwd} ${ftp_url}
-						cd ${ftp_folder_step}
-						cls -1 | sort -r | grep ${ftp_time_step} | sed -e "s/@//"
-						close
-						quit
-ftprem`
-		# ----------------------------------------------------------------------------------------
-    
-		# ----------------------------------------------------------------------------------------
-		# Download file(s)	
-		for ftp_file in ${ftp_file_list}; do
-		    
-		    echo -n " ====> DOWNLOAD FILE: ${ftp_file} IN ${folder_in_step} ..." 
-		    
-			if ! [ -e ${folder_in_step}/${ftp_file} ]; then
-				
-				`lftp << ftprem
-					        set ftp:proxy  ${proxy}
-							open -u ${ftp_usr},${ftp_pwd} ${ftp_url}
-							cd ${ftp_folder_step}
-							get1 -o ${folder_in_step}/${ftp_file} ${ftp_file}
-							close
-							quit
-ftprem`
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    log "DRY-RUN: would download ${FTP_FOLDER}/${pattern} -> ${stage_file}"
+    continue
+  fi
 
-				if [ $? -eq 0 ] > /dev/null 2>&1; then
-			 		echo " DONE!"
-				else
-					echo " FAILED [FTP ERROR]!"
-				fi
-			
-			else
-				echo " SKIPPED! File previously downloaded!"
-			fi
-		    # ----------------------------------------------------------------------------------------
-        
-		done
-		# ----------------------------------------------------------------------------------------
-	
-	fi
-    # ----------------------------------------------------------------------------------------
+  session_log="$(mktemp)"
 
-	# ----------------------------------------------------------------------------------------
-	# Iterate on file(s) in source folder
-	for path_in_bz2 in "$folder_in_step"/*; do
-		
-		# ----------------------------------------------------------------------------------------
-		# Condition to control file extention (permitted only .bz2)
-		if [[ $path_in_bz2 == *.bz2 ]]; then
-		
-			# ----------------------------------------------------------------------------------------
-			# Get filename and folder		
-			file_in_bz2=$(basename -- "$path_in_bz2")
-			folder_in_bz2=$(dirname -- "$path_in_bz2")
-			# ----------------------------------------------------------------------------------------
+  # --- download exact file with pget, forcing local CWD ---
+  if ! lftp_run "
+    lcd ${stage_dir}
+    cd ${FTP_FOLDER}
+    pget -n ${PGET_N} -c ${pattern}
+  " | tee "${session_log}"; then
+    echo "lftp pget failed for ${pattern}"
+    tail -n 50 "${session_log}" || true
+    rm -f "${session_log}"
+    die "lftp pget failed for ${pattern}"
+  fi
 
-			# ----------------------------------------------------------------------------------------
-			# Time file information
-			time_file=$(echo ${file_in_bz2} | grep -Eo '[[:digit:]]{4}[[:digit:]]{2}[[:digit:]]{2}_[[:digit:]]{2}[[:digit:]]{2}')
-			
-			year_step=${time_file:0:4}
-			month_step=${time_file:4:2}
-			day_step=${time_file:6:2}
-			hour_step=${time_file:9:2}
-			minute_step=${time_file:11:2}
-			
-			# Path(s) file information
-			folder_tmp_step=${folder_tmp_raw/'%YYYY'/$year_step}
-			folder_tmp_step=${folder_tmp_step/'%MM'/$month_step}
-			folder_tmp_step=${folder_tmp_step/'%DD'/$day_step}
-			folder_tmp_step=${folder_tmp_step/'%HH'/$hour_step}
-			folder_tmp_step=${folder_tmp_step/'%MM'/$minute_step}
-			
-			folder_out_step=${folder_out_raw/'%YYYY'/$year_step}
-			folder_out_step=${folder_out_step/'%MM'/$month_step}
-			folder_out_step=${folder_out_step/'%DD'/$day_step}
-			folder_out_step=${folder_out_step/'%HH'/$hour_step}
-			folder_out_step=${folder_out_step/'%MM'/$minute_step}
+  # --- verify staging file exists and is non-empty ---
+  if [[ ! -s "${stage_file}" ]]; then
+    echo "No file present locally after transfer for ${y}-${m}-${d} (pattern: ${pattern})."
+    echo "Last lftp session log snippet:"
+    tail -n 50 "${session_log}" || true
+    rm -f "${session_log}"
+    die "Transfer reported but file not found: ${stage_file}"
+  fi
 
-			file_tmp_grib_step=${file_tmp_grib_raw/'%YYYY'/$year_step}
-			file_tmp_grib_step=${file_tmp_grib_step/'%MM'/$month_step}
-			file_tmp_grib_step=${file_tmp_grib_step/'%DD'/$day_step}
-			file_tmp_grib_step=${file_tmp_grib_step/'%HH'/$hour_step}
-			file_tmp_grib_step=${file_tmp_grib_step/'%MM'/$minute_step}
+  # --- move from staging to final (if needed) ---
+  if [[ "${stage_dir}" != "${target_dir}" ]]; then
+    safe_move "${stage_file}" "${target_file}"
+  fi
 
-			file_out_grib_step=${file_out_grib_raw/'%YYYY'/$year_step}
-			file_out_grib_step=${file_out_grib_step/'%MM'/$month_step}
-			file_out_grib_step=${file_out_grib_step/'%DD'/$day_step}
-			file_out_grib_step=${file_out_grib_step/'%HH'/$hour_step}
-			file_out_grib_step=${file_out_grib_step/'%MM'/$minute_step}
+  # --- final verification ---
+  if [[ -s "${target_file}" ]]; then
+    echo "----- Downloaded files for ${y}-${m}-${d} -----"
+    echo "Source: ${FTP_URL}${FTP_FOLDER}"
+    echo "Destination: ${target_dir}"
+    echo "Pattern: ${pattern}"
+    echo "-----------------------------------------------"
+    echo "  • ${FTP_FOLDER}/${pattern}"
+  else
+    echo "File missing after move for ${y}-${m}-${d}: ${target_file}"
+    tail -n 50 "${session_log}" || true
+    rm -f "${session_log}"
+    die "File verification failed: ${target_file}"
+  fi
 
-			file_in_nc_step=${file_in_nc_raw/'%YYYY'/$year_step}
-			file_in_nc_step=${file_in_nc_step/'%MM'/$month_step}
-			file_in_nc_step=${file_in_nc_step/'%DD'/$day_step}
-			file_in_nc_step=${file_in_nc_step/'%HH'/$hour_step}
-			file_in_nc_step=${file_in_nc_step/'%MM'/$minute_step}
-
-			file_out_nc_step=${file_out_nc_raw/'%YYYY'/$year_step}
-			file_out_nc_step=${file_out_nc_step/'%MM'/$month_step}
-			file_out_nc_step=${file_out_nc_step/'%DD'/$day_step}
-			file_out_nc_step=${file_out_nc_step/'%HH'/$hour_step}
-			file_out_nc_step=${file_out_nc_step/'%MM'/$minute_step}
-
-			# Path(s) definition
-			path_tmp_grib_step=${folder_tmp_step}${file_tmp_grib_step}
-			path_out_grib_step=${folder_tmp_step}${file_out_grib_step}
-			path_in_nc_step=${folder_tmp_step}${file_in_nc_step}
-			path_out_nc_step=${folder_out_step}${file_out_nc_step}
-			# ----------------------------------------------------------------------------------------
-			
-			# ----------------------------------------------------------------------------------------	
-			# Create folder(s)
-			if [ ! -d "$folder_tmp_step" ]; then
-				mkdir -p $folder_tmp_step
-			fi
-			if [ ! -d "$folder_out_step" ]; then
-				mkdir -p $folder_out_step
-			fi
-			# ----------------------------------------------------------------------------------------
-
-			# ----------------------------------------------------------------------------------------
-			# Create nc file over selected domain
-			echo " ====> CREATE NC FILE: ${file_out_nc_step} ..."
-			if ! [ -e ${path_out_nc_step} ]; then
-
-				# ----------------------------------------------------------------------------------------
-				# Unzip file (from gz to grib)
-				echo -n " =====> UNZIP FILE: ${file_in_bz2} TO ${file_tmp_grib_step} ..."
-				if ! [ -e ${path_tmp_grib_step} ]; then
-				    if bzip2 -dc ${path_in_bz2} > ${path_tmp_grib_step}; then
-				        echo " DONE!"
-				    else
-				        echo " FAILED! Error in command execution!"
-				    fi
-				else
-					echo " SKIPPED! File previously unzipped!"
-				fi
-				# ----------------------------------------------------------------------------------------
-
-				# ----------------------------------------------------------------------------------------
-				# Set regular grid to file
-				echo -n " =====> SET REGULAR GRID TO FILE: ${file_tmp_grib_step} to ${file_out_grib_step} ..."
-				if ! [ -e ${path_out_grib_step} ]; then
-				
-				    if $exec_cdo -R copy $path_tmp_grib_step $path_out_grib_step > /dev/null 2>&1; then
-				        echo " DONE!"
-				    else
-				        echo " FAILED! Error in command execution!"
-				    fi
-
-				else
-					echo " SKIPPED! grid previously set!"
-				fi
-				# ----------------------------------------------------------------------------------------
-
-				# ----------------------------------------------------------------------------------------
-				# Convert file to grib to netcdf fulldisk
-				echo -n " =====> CONVERT FILE: ${file_out_grib_step} to ${file_in_nc_step} ..."
-				if ! [ -e ${path_in_nc_step} ]; then
-				
-				    if $exec_cdo -f nc copy $path_out_grib_step $path_in_nc_step > /dev/null 2>&1; then
-				        echo " DONE!"
-				    else
-				        echo " FAILED! Error in command execution!"
-				    fi
-
-				else
-					echo " SKIPPED! File previously converted!"
-				fi
-				# ----------------------------------------------------------------------------------------		
-				
-				# ----------------------------------------------------------------------------------------
-				# Compute VAR_0_7 ==> Equation: float(7)/float(7)*H14_SM_V_L1
-				echo -n " =====> COMPUTE SOIL MOISTURE VAR 0_7 ..."
-				if [ -e ${path_in_nc_step} ]; then
-				
-				    if ${exec_ncap2} -s "var_0_7=1*var40" -v -A $path_in_nc_step $path_in_nc_step > /dev/null 2>&1; then
-				        echo " DONE!"
-				    else
-				        echo " FAILED! Error in command execution!"
-				    fi
-
-				else
-					echo " FAILED! File does not exist! Variable was not computed!"
-				fi
-				# ----------------------------------------------------------------------------------------	
-				
-				# ----------------------------------------------------------------------------------------
-				# Compute VAR_0_28 ==> Equation: float(7)/float(28)*H14_SM_V_L1 + float(28-7)/float(28)*H14_SM_V_L2
-				echo -n " =====> COMPUTE SOIL MOISTURE VAR 0_28 ..."
-				if [ -e ${path_in_nc_step} ]; then
-				
-				    if ${exec_ncap2} -s "var_0_28=0.25*var40 + 0.75*var41" -v -A $path_in_nc_step $path_in_nc_step > /dev/null 2>&1; then
-				        echo " DONE!"
-				    else
-				        echo " FAILED! Error in command execution!"
-				    fi
-
-				else
-					echo " FAILED! File does not exist! Variable was not computed!"
-				fi
-				# ----------------------------------------------------------------------------------------	
-				
-				# ----------------------------------------------------------------------------------------
-				# Compute VAR_0_100 ==> Equation: float(7)/float(100)*H14_SM_V_L1 + float(28-7)/float(100)*H14_SM_V_L2 + (float(100-7-(28-7))/float(100))*H14_SM_V_L3
-				echo -n " =====> COMPUTE SOIL MOISTURE VAR 0_100 ..."
-				if [ -e ${path_in_nc_step} ]; then
-				
-				    if ${exec_ncap2} -s "var_0_100=0.07*var40 + 0.21*var41 + 0.72*var42" -v -A $path_in_nc_step $path_in_nc_step > /dev/null 2>&1; then
-				        echo " DONE!"
-				    else
-				        echo " FAILED! Error in command execution!"
-				    fi
-
-				else
-					echo " FAILED! File does not exist! Variable was not computed!"
-				fi
-				# ----------------------------------------------------------------------------------------	
-				
-				# ----------------------------------------------------------------------------------------
-				# Select file over domain
-				echo -n " =====> SELECT FILE OVER DOMAIN: ${file_in_nc_step} to ${file_out_nc_step} ..."
-				if ! [ -e ${path_out_nc_step} ]; then
-				
-				    if ${exec_cdo} -z zip_9 sellonlatbox,${domain_bb} ${path_in_nc_step} ${path_out_nc_step} > /dev/null 2>&1; then
-				        echo " DONE!"
-				    else
-				        echo " FAILED! Error in command execution!"
-				    fi
-				    
-				else
-					echo " SKIPPED! File previously selected over domain!"
-				fi
-				# ----------------------------------------------------------------------------------------		
-			
-			else
-			    # ----------------------------------------------------------------------------------------ù
-			    # Exit with no operatio(s)
-				echo " SKIPPED! File previously created!"
-				# ----------------------------------------------------------------------------------------
-			fi  
-			# ----------------------------------------------------------------------------------------
-			
-			# ----------------------------------------------------------------------------------------
-			# Create file grid
-			if [ -e ${path_out_nc_step} ]; then
-				echo " =====> CREATE GRID FILE: ${file_grid} ... "
-				if ! [ -e ${path_grid} ]; then
-					
-				    if ${exec_ncks} -v lon,lat ${path_out_nc_step} ${path_grid} > /dev/null 2>&1; then
-				        echo " DONE!"
-				    else
-				        echo " FAILED! Error in command execution!"
-				    fi					
-				fi
-			fi
-			# ----------------------------------------------------------------------------------------
-
-			# ----------------------------------------------------------------------------------------
-			# Remove tmp file(s)
-			if [ -e ${path_tmp_grib_step} ]; then
-			    rm ${path_tmp_grib_step} 
-		    fi
-			
-			if [ -e ${path_out_grib_step} ]; then
-			    rm ${path_out_grib_step} 
-		    fi
-		    
-			if [ -e ${path_in_nc_step} ]; then
-			    rm ${path_in_nc_step} 
-		    fi
-			# ----------------------------------------------------------------------------------------
-			
-			echo ${path_out_nc_step}	
-
-			# ----------------------------------------------------------------------------------------
-			# Exit message
-			if [ -e ${path_out_nc_step} ]; then
-				echo " ====> CREATE NC FILE: ${file_out_nc_step} ... DONE!"
-			else
-				echo " ====> CREATE NC FILE: ${file_out_nc_step} ... FAILED!"
-			fi
-			# ----------------------------------------------------------------------------------------
-				
-		fi
-		# ----------------------------------------------------------------------------------------
-		
-	done
-	# ----------------------------------------------------------------------------------------
-	
-	# Info time end
-	echo " ===> TIME_STEP: $time_step ===> END "
-    # ----------------------------------------------------------------------------------------
+  rm -f "${session_log}"
+  log "====> TIME_STEP: ${y}-${m}-${d} ===> END"
 
 done
 
-# Info script end
-echo " ==> "$script_name" (Version: "$script_version" Release_Date: "$script_date")"
-echo " ==> ... END"
-echo " ==> Bye, Bye"
-echo " ==================================================================================="
-# ----------------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
+log "==> ${script_name} (Version: ${script_version} Release_Date: ${script_date})"
+log "==> ... END"
+log "==> Bye, Bye"
+# =======================================================================================
