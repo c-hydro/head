@@ -5,10 +5,17 @@
 PACKAGE: operational release
 
 DOWNLOADER:
-	- H60: add lock file to avoid multiple accesses during the file download;
-	- H61: add lock file to avoid multiple accesses during the file download.
-	- H29: add lock file to avoid multiple accesses during the file download;
-	- H122: add lock file to avoid multiple accesses during the file download.
+	- H10: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H12: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H13: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H14: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H26: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H34: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H60: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H61: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H64: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H29: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H122: limit the connections and add lock file to avoid multiple accesses during the file download.
 
 ### Version 1.3.0 [2025-07-15]
 PACKAGE: operational release
