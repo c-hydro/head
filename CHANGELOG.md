@@ -1,6 +1,38 @@
 =========
 # Changelog
 
+### Version 1.5.0 [2025-11-20]
+PACKAGE: operational release
+
+DOWNLOADER - MOVER - CLEANER TOOLS:
+	- H10: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H12: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H13: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H14: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H26: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H34: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H60: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H61: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H64: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H29: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H122: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder.
+
+### Version 1.4.0 [2025-10-24]
+PACKAGE: operational release
+
+DOWNLOADER:
+	- H10: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H12: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H13: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H14: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H26: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H34: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H60: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H61: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H64: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H29: limit the connections and add lock file to avoid multiple accesses during the file download;
+	- H122: limit the connections and add lock file to avoid multiple accesses during the file download.
+
 ### Version 1.3.0 [2025-07-15]
 PACKAGE: operational release
 

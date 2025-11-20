@@ -1,0 +1,24 @@
+# .netrc machine label (must match entry in ~/.netrc)
+NETRC_MACHINE_LABEL="ftphsaf.meteoam.it"
+
+# FTP host (optional override, normally same as machine label)
+FTP_URL="ftphsaf.meteoam.it"
+
+# How many days back (0 = only current hour)
+DAYS_BACK=3
+
+# Local storage pattern (keep in sync with your Python script logic)
+LOCAL_FOLDER_MIRROR="/share/HSAF_MIRROR/
+
+# Remote folder template
+FTP_FOLDER_H10="/products/h10/h10_cur_mon_data/"
+FTP_FOLDER_H12="/products/h12/h12_cur_mon_data/"
+FTP_FOLDER_H13="/products/h13/h13_cur_mon_data/"
+FTP_FOLDER_H14="/products/h14/h14_cur_mon_grib/"
+FTP_FOLDER_H26="/products/h26/h26_cur_mon_nc/"
+FTP_FOLDER_H29="/products/h29/h29_cur_mon_nc/"
+FTP_FOLDER_H34="/products/h34/h34_cur_mon_data/"
+FTP_FOLDER_H60="/products/h60/h60_cur_mon_data/"
+FTP_FOLDER_H61="/products/h61/h61_cur_mon_data/"
+FTP_FOLDER_H64="/products/h34/h34_cur_mon_data/"
+FTP_FOLDER_H122="/products/h122/h122_cur_mon_nc/"

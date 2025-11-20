@@ -127,3 +127,15 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# project file and workspace
+example/
+docs/
+dset/
+conda/
+
+# files created by conda
+miniconda.sh
+/example/
+/example/h60/
+/example/h61/
