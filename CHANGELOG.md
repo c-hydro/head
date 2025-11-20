@@ -1,6 +1,22 @@
 =========
 # Changelog
 
+### Version 1.5.0 [2025-11-20]
+PACKAGE: operational release
+
+DOWNLOADER - MOVER - CLEANER TOOLS:
+	- H10: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H12: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H13: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H14: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H26: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H34: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H60: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H61: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H64: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H29: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder;
+	- H122: download the product using a ftp mirroring to tmp folder, then move the file to the final destination and clean the tmp folder.
+
 ### Version 1.4.0 [2025-10-24]
 PACKAGE: operational release
 
